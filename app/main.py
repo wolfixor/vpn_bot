@@ -1,0 +1,37 @@
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+import asyncio
+from app.core.config import settings
+from app.api.api_v1.api import api_router
+from app.database.database import connect_to_mongo, close_mongo_connection, init_db
+from app.bot.bot import bot
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await connect_to_mongo()
+    await init_db()
+    
+    # Start Telegram bot if token is provided
+    if settings.TELEGRAM_BOT_TOKEN:
+        asyncio.create_task(bot.start())
+    
+    yield
+    
+    # Shutdown
+    if settings.TELEGRAM_BOT_TOKEN:
+        await bot.stop()
+    await close_mongo_connection()
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    lifespan=lifespan
+)
+
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {"status": "healthy", "service": "vpn_bot"}

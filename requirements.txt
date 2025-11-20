@@ -1,0 +1,24 @@
+# FastAPI and Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Telegram Bot
+python-telegram-bot==20.7
+
+# Database
+motor==3.3.2
+beanie==1.23.6
+pymongo==4.6.0
+
+# HTTP Client
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# Date/Time
+python-dateutil==2.8.2

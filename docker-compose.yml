@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  vpn_bot:
+    build: .
+    container_name: vpn_bot
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - MONGODB_URL=${MONGODB_URL}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - NEWS_CHANNEL_USERNAME=${NEWS_CHANNEL_USERNAME}
+      - NEWS_CHANNEL_URL=${NEWS_CHANNEL_URL}
+      - PAYMENT_CHANNEL_ID=${PAYMENT_CHANNEL_ID}
+      - GERMANY_PANEL_USERNAME=${GERMANY_PANEL_USERNAME}
+      - GERMANY_PANEL_PASSWORD=${GERMANY_PANEL_PASSWORD}
+      - TURKEY_PANEL_USERNAME=${TURKEY_PANEL_USERNAME}
+      - TURKEY_PANEL_PASSWORD=${TURKEY_PANEL_PASSWORD}
+      - CARD_NUMBER=${CARD_NUMBER}
+      - NAME_CARD=${NAME_CARD}
+      - TETHER=${TETHER}
+      - TRON=${TRON}
+      - SOLANA=${SOLANA}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - vpn_network
+
+networks:
+  vpn_network:
+    driver: bridge
