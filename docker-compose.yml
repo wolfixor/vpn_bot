@@ -5,6 +5,8 @@ services:
     build: .
     container_name: vpn_bot
     restart: unless-stopped
+    expose:
+      - "8000"
     environment:
       - ENVIRONMENT=production
       - MONGODB_URL=${MONGODB_URL}
@@ -33,10 +35,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - vpn_bot
     networks:

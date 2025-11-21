@@ -18,6 +18,11 @@ mkdir -p ssl
 # Save origin certificate
 nano ssl/cert.pem
 # Paste the certificate content
+chmod 700 ssl/
+chmod 600 ssl/key.pem
+chmod 644 ssl/cert.pem
+
+
 
 # Save private key
 nano ssl/key.pem
