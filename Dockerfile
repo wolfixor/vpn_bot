@@ -12,5 +12,6 @@ COPY . .
 # Set environment to production
 ENV ENVIRONMENT=production
 
-# Run the bot
-CMD ["python", "-m", "app.main"]
+# Run with uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
