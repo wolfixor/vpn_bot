@@ -36,6 +36,7 @@ class VPNService:
         
         # Generate unique subscription token for this order
         subscription_token = str(uuid.uuid4())
+        print(f"🔑 Generated new subscription token: {subscription_token}")
         
         # Calculate expiry
         expiry_date = datetime.utcnow() + timedelta(days=vpn_plan.duration_days)
@@ -130,6 +131,7 @@ class VPNService:
             is_active=True
         )
         await subscription.save()
+        print(f"✅ Subscription saved with token: {subscription.subscription_token}")
         
         # Update user and order
         user.subscriptions.append(subscription)
@@ -139,8 +141,11 @@ class VPNService:
         order.expires_at = expiry_date
         await order.save()
         
+        subscription_url = f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription_token}"
+        print(f"📱 Returning subscription URL: {subscription_url}")
+        
         return {
-            "subscription_url": f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription_token}",
+            "subscription_url": subscription_url,
             "individual_configs": all_config_urls,
             "total_configs": len(all_config_urls)
         }
