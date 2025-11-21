@@ -5,23 +5,21 @@ from app.services.vpn_service import vpn_service
 
 router = APIRouter()
 
-@router.get("/{user_token}")
-async def get_subscription(user_token: str):
-    """Get unified subscription with all user configs"""
+@router.get("/{subscription_token}")
+async def get_subscription(subscription_token: str):
+    """Get subscription configs by token"""
+    from app.models.subscription import Subscription
     
-    # Get user
-    user = await User.find_one(User.subscription_token == user_token)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get subscription
+    subscription = await Subscription.find_one(Subscription.subscription_token == subscription_token)
+    if not subscription or not subscription.is_active:
+        raise HTTPException(status_code=404, detail="Subscription not found")
     
-    # Auto-sync all subscriptions to new panels
-    for sub_link in user.subscriptions:
-        subscription = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
-        if subscription and subscription.is_active:
-            await vpn_service.sync_subscription_to_new_panels(subscription)
+    # Auto-sync subscription to new panels
+    await vpn_service.sync_subscription_to_new_panels(subscription)
     
-    # Get all config URLs for user using VPN service
-    all_configs = await vpn_service.get_user_configs(user_token)
+    # Get all config URLs for this subscription
+    all_configs = await vpn_service.get_user_configs(subscription_token)
     
     if not all_configs:
         raise HTTPException(status_code=404, detail="No active configs found")

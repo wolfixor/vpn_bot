@@ -34,10 +34,8 @@ class VPNService:
         user = await order.user.fetch() if hasattr(order.user, 'fetch') else order.user
         vpn_plan = await order.vpn_plan.fetch() if hasattr(order.vpn_plan, 'fetch') else order.vpn_plan
         
-        # Generate subscription token if not exists
-        if not user.subscription_token:
-            user.subscription_token = str(uuid.uuid4())
-            await user.save()
+        # Generate unique subscription token for this order
+        subscription_token = str(uuid.uuid4())
         
         # Calculate expiry
         expiry_date = datetime.utcnow() + timedelta(days=vpn_plan.duration_days)
@@ -121,8 +119,9 @@ class VPNService:
                 else:
                     print(f"❌ Failed to add client to inbound {inbound_id}: {result}")
         
-        # Create ONE Subscription record for this purchase
+        # Create ONE Subscription record for this purchase with unique token
         subscription = Subscription(
+            subscription_token=subscription_token,
             base_name=base_name,
             user_telegram_id=user.telegram_id,
             configs=config_items,
@@ -141,7 +140,7 @@ class VPNService:
         await order.save()
         
         return {
-            "subscription_url": f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{user.subscription_token}",
+            "subscription_url": f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription_token}",
             "individual_configs": all_config_urls,
             "total_configs": len(all_config_urls)
         }
@@ -255,42 +254,38 @@ class VPNService:
         await subscription.save()
         return deleted_count > 0
     
-    async def get_user_configs(self, user_token: str) -> List[str]:
-        """Get all config URLs for a user by subscription token"""
-        user = await User.find_one(User.subscription_token == user_token)
-        if not user:
+    async def get_user_configs(self, subscription_token: str) -> List[str]:
+        """Get all config URLs for a subscription by token"""
+        subscription = await Subscription.find_one(Subscription.subscription_token == subscription_token)
+        if not subscription or not subscription.is_active:
             return []
         
         all_configs = []
-        for subscription_link in user.subscriptions:
-            subscription = await subscription_link.fetch() if hasattr(subscription_link, 'fetch') else subscription_link
-            if not subscription or not subscription.is_active:
+        for config_item in subscription.configs:
+            panel_info = None
+            for panel_name, info in self.ENABLED_PANELS.items():
+                if info['name'] == config_item.panel_name:
+                    panel_info = info
+                    break
+            
+            if not panel_info:
                 continue
             
-            for config_item in subscription.configs:
-                panel_info = None
-                for panel_name, info in self.ENABLED_PANELS.items():
-                    if info['name'] == config_item.panel_name:
-                        panel_info = info
-                        break
-                
-                if not panel_info:
-                    continue
-                
-                try:
-                    panel_service = XUIService(panel_name)
-                    inbounds_response = await panel_service.get_inbounds()
-                    if inbounds_response and inbounds_response.get("success"):
-                        existing_inbounds = inbounds_response.get("obj", [])
-                        for inbound_data in existing_inbounds:
-                            if inbound_data["id"] == config_item.inbound_id:
-                                config_url = self.generate_config_url_from_item(config_item, inbound_data, panel_info['ip'])
-                                if config_url:
-                                    all_configs.append(config_url)
-                                break
-                except Exception as e:
-                    print(f"Error getting config for {config_item.panel_name}: {e}")
+            try:
+                panel_service = XUIService(panel_name)
+                inbounds_response = await panel_service.get_inbounds()
+                if inbounds_response and inbounds_response.get("success"):
+                    existing_inbounds = inbounds_response.get("obj", [])
+                    for inbound_data in existing_inbounds:
+                        if inbound_data["id"] == config_item.inbound_id:
+                            config_url = self.generate_config_url_from_item(config_item, inbound_data, panel_info['ip'])
+                            if config_url:
+                                all_configs.append(config_url)
+                            break
+            except Exception as e:
+                print(f"Error getting config for {config_item.panel_name}: {e}")
         
         return all_configs
+
 
 vpn_service = VPNService()

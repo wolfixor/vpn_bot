@@ -15,6 +15,7 @@ class Subscription(Document):
     """One subscription = multiple configs across panels/inbounds"""
     
     # Subscription identity
+    subscription_token: str  # Unique token for this subscription
     base_name: str  # "Kobra_c7135768" - user-friendly name
     user_telegram_id: int
     
