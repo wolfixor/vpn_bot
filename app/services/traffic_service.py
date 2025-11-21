@@ -179,8 +179,8 @@ class TrafficService:
         """Send traffic warning to user"""
         text = f"⚠️ **هشدار ترافیک**\n\n"
         text += f"📊 ترافیک باقیمانده: {remaining_gb:.2f}GB\n"
-        text += f"💡 برای تمدید اشتراک از دکمه 'اشتراکهای من' استفاده کنید\n\n"
-        text += f"🔄 برای مشاهده جزئیات بیشتر از دکمه زیر استفاده کنید"
+        text += f"💡 برای تمدید اشتراک از گزینه 'اشتراکهای من' استفاده کنید\n\n"
+        text += f"🔄 برای مشاهده جزئیات بیشتر از گزینه زیر استفاده کنید"
         
         await context.bot.send_message(
             chat_id=user_id,
@@ -193,7 +193,7 @@ class TrafficService:
         text = f"⏰ **هشدار انقضا**\n\n"
         text += f"📅 روزهای باقیمانده: {days_remaining}\n"
         text += f"🔄 برای تمدید اشتراک اقدام کنید\n\n"
-        text += f"💡 از دکمه 'اشتراکهای من' برای مشاهده جزئیات استفاده کنید"
+        text += f"💡 از گزینه 'اشتراکهای من' برای مشاهده جزئیات استفاده کنید"
         
         await context.bot.send_message(
             chat_id=user_id,

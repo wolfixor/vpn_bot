@@ -33,8 +33,9 @@ def get_vpn_plans_keyboard(plans):
     """VPN plans selection keyboard"""
     keyboard = []
     for plan in plans:
-        traffic = f"{plan.traffic_limit_gb}GB" if plan.traffic_limit_gb else "نامحدود"
-        text = f"📦 {plan.name} - ${plan.price} ({traffic})"
+        traffic = f"{plan.traffic_limit_gb}گیگ" if plan.traffic_limit_gb else "نامحدود"
+        price = int(plan.price / 1000)
+        text = f"📦 {plan.name} - {price:,} تومان ({traffic})"
         callback_data = f"plan_{plan.id}"
         keyboard.append([InlineKeyboardButton(text, callback_data=callback_data)])
     

@@ -208,7 +208,7 @@ class XUIService:
                 }]
             }
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.post(
                 f"{self.base_url}/panel/api/inbounds/updateClient/{client_id}",
                 data={

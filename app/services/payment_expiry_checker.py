@@ -27,7 +27,7 @@ async def check_expired_payments(bot):
                 
                 text = "⏰ **زمان پرداخت به پایان رسید**\n\n"
                 text += "متأسفانه زمان ارسال رسید پرداخت به پایان رسید.\n\n"
-                text += "برای خرید مجدد از دکمه 🛒 خرید VPN استفاده کنید."
+                text += "برای خرید مجدد از گزینه 🛒 خرید VPN استفاده کنید."
                 
                 await bot.send_message(
                     chat_id=payment.user_telegram_id,
@@ -86,7 +86,7 @@ async def check_expired_subscriptions(bot):
                             text = f"⚠️ **هشدار ترافیک**\n\n"
                             text += f"اشتراک {sub.base_name}:\n"
                             text += f"ترافیک باقیمانده: {remaining_gb:.2f}GB\n\n"
-                            text += "برای تمدید از دکمه 🛒 خرید VPN استفاده کنید."
+                            text += "برای تمدید از گزینه 🛒 خرید VPN استفاده کنید."
                             
                             await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode="Markdown")
                             sub.traffic_warned = True
@@ -101,7 +101,7 @@ async def check_expired_subscriptions(bot):
                             text = f"⏰ **هشدار انقضا**\n\n"
                             text += f"اشتراک {sub.base_name}:\n"
                             text += f"3 روز تا پایان اشتراک\n\n"
-                            text += "برای تمدید از دکمه 🛒 خرید VPN استفاده کنید."
+                            text += "برای تمدید از گزینه 🛒 خرید VPN استفاده کنید."
                             
                             await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode="Markdown")
                             sub.expiry_warned = True
@@ -138,6 +138,6 @@ async def disable_subscription(bot, subscription: Subscription, reason: str):
             text = f"📊 **ترافیک تمام شد**\n\n"
             text += f"اشتراک {subscription.base_name} ترافیک خود را مصرف کرد.\n\n"
         
-        text += "برای تمدید از دکمه 🛒 خرید VPN استفاده کنید."
+        text += "برای تمدید از گزینه 🛒 خرید VPN استفاده کنید."
         
         await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode="Markdown")

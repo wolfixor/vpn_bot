@@ -13,12 +13,12 @@ async def show_renewal_subscriptions(query, context):
     user = await User.find_one(User.telegram_id == query.from_user.id)
     active_subs = await renewal_service.get_active_subscriptions(user)
     
-    text = "🔄 **تمدید اشتراک**\n\nکدام اشتراک را میخواهید تمدید کنید؟\n\n"
+    text = "🔄 **تمدید اشتراک**\n\nیک اشتراک انتخاب کنید:\n\n"
     
     keyboard = []
     for sub in active_subs:
         eligibility = await renewal_service.check_renewal_eligibility(sub)
-        status = "⏰ منقضی شده" if eligibility['is_expired'] else f"✅ {eligibility['days_remaining']} روز باقیمانده"
+        status = "⏰ منقضی شده" if eligibility['is_expired'] else f"✅ {eligibility['days_remaining']}روز باقیمانده"
         keyboard.append([InlineKeyboardButton(f"{sub.base_name} ({status})", callback_data=f"renew_sub_{sub.id}")])
     
     keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
@@ -37,20 +37,14 @@ async def show_renewal_plans(query, context, sub_id):
     escaped_name = subscription.base_name.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
     
     text = f"📦 **تمدید {escaped_name}**\n\n"
-    text += f"📊 وضعیت فعلی:\n"
-    text += f"• روزهای باقیمانده: {eligibility['days_remaining']}\n"
-    text += f"• ترافیک باقیمانده: {eligibility['traffic_remaining_gb']:.2f}GB\n\n"
-    text += "یک پلن برای تمدید انتخاب کنید:\n\n"
-    
-    for plan in plans:
-        text += f"📦 **{plan.name}**\n"
-        text += f"💰 ${plan.price}\n"
-        text += f"⏱️ +{plan.duration_days} روز\n"
-        text += f"📊 +{plan.traffic_limit_gb}GB ترافیک\n\n"
+    text += f"📊 {eligibility['days_remaining']}روز | {eligibility['traffic_remaining_gb']:.0f}گیگ باقیمانده\n\n"
+    text += "یک پلن انتخاب کنید:"
     
     keyboard = []
     for plan in plans:
-        keyboard.append([InlineKeyboardButton(f"💰 {plan.name} - ${plan.price}", callback_data=f"renew_plan_{sub_id}_{plan.id}")])
+        price_display = int(plan.price / 1000)
+        button_text = f"💰 {price_display}تومان | +{plan.duration_days}روز | +{plan.traffic_limit_gb}گیگ"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"renew_plan_{sub_id}_{plan.id}")])
     keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="renew_subscription")])
     
     context.user_data["renewing_subscription_id"] = str(sub_id)
@@ -91,8 +85,9 @@ async def create_renewal_order(query, context, payment_method):
     # Create payment
     payment = await payment_service.create_payment_request(order, payment_method, user.telegram_id)
     
-    # Store renewal info
+    # CRITICAL: Mark this payment as renewal in bot_data
     context.bot_data[f"renewal_sub_{payment.id}"] = str(sub_id)
+    context.bot_data[f"is_renewal_{payment.id}"] = True
     
     instructions = payment_service.get_payment_instructions(payment)
     await query.edit_message_text(
@@ -120,25 +115,30 @@ async def confirm_renewal_payment(query, context, payment_id):
     # Extend subscription
     result = await renewal_service.extend_subscription(subscription, plan, order)
     
+    # Clean up renewal flags
+    context.bot_data.pop(f"renewal_sub_{payment_id}", None)
+    context.bot_data.pop(f"is_renewal_{payment_id}", None)
+    
     # Notify user
     user = await User.find_one(User.telegram_id == payment.user_telegram_id)
     
+    escaped_name = subscription.base_name.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
     text = "✅ **اشتراک تمدید شد!**\n\n"
-    text += f"📦 **اشتراک:** {subscription.base_name}\n"
-    text += f"💰 **پلن:** {plan.name}\n"
+    text += f"📦 **اشتراک:** {escaped_name}\n"
     text += f"⏱️ **تاریخ انقضا جدید:** {result['new_expiry'].strftime('%Y-%m-%d')}\n"
-    text += f"📊 **ترافیک کل:** {result['new_traffic_limit_gb']:.0f}GB\n\n"
+    text += f"📊 **ترافیک کل:** {result['new_traffic_limit_gb']:.0f}گیگ\n\n"
     text += "🔄 کانفیگ های شما به صورت خودکار بروزرسانی شدند."
     
     await context.bot.send_message(chat_id=user.telegram_id, text=text, parse_mode="Markdown")
     
     # Update admin message
     try:
+        escaped_admin_name = subscription.base_name.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
         await query.edit_message_caption(
             caption=f"✅ **تمدید تأیید شد**\n\n"
                    f"کاربر: {user.first_name}\n"
-                   f"اشتراک: {subscription.base_name}\n"
-                   f"مبلغ: ${payment.amount}",
+                   f"اشتراک: {escaped_admin_name}\n"
+                   f"مبلغ: {int(payment.amount / 1000)}تومان",
             parse_mode="Markdown"
         )
     except Exception as e:

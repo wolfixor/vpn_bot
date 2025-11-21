@@ -54,7 +54,7 @@ class TelegramBot:
         text += "/start - منوی اصلی\n"
         text += "/help - نمایش این راهنما\n"
         text += "/status - وضعیت ربات\n\n"
-        text += "🤖 از دکمه‌ها برای حرکت استفاده کنید!"
+        text += "🤖 از گزینه‌ها برای حرکت استفاده کنید!"
         
         await update.message.reply_text(text, parse_mode="Markdown")
     
@@ -102,7 +102,7 @@ class TelegramBot:
                 await handle_broadcast_message(update, context)
             else:
                 text = "🤖 من این پیام را نمیفهمم.\n\n"
-                text += "از دکمههای زیر استفاده کنید!"
+                text += "از گزینههای زیر استفاده کنید!"
                 await update.message.reply_text(text)
     
     async def _handle_payment_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,7 +135,7 @@ class TelegramBot:
             await update.message.reply_text(
                 "❌ **عکس نامعتبر**\n\n"
                 "شما هیچ پرداخت معلقی ندارید یا قبلاً رسید ارسال کردهاید.\n\n"
-                "برای خرید VPN از دکمه 🛒 خرید VPN استفاده کنید.",
+                "برای خرید VPN از گزینه 🛒 خرید VPN استفاده کنید.",
                 parse_mode="Markdown"
             )
             return
@@ -156,10 +156,15 @@ class TelegramBot:
         from app.models.user import User
         user = await User.find_one(User.telegram_id == user_id)
         
+        username_display = f"@{user.username}" if user.username else "N/A"
+        phone_display = user.phone if user.phone else "N/A"
+        amount_display = int(payment.amount / 1000)
         admin_text = f"💳 **درخواست تأیید پرداخت**\n\n"
-        admin_text += f"👤 **کاربر:** {user.first_name} (@{user.username or 'N/A'})\n"
+        admin_text += f"👤 **کاربر:** {user.first_name}\n"
+        admin_text += f"💬 **یوزرنیم:** {username_display}\n"
+        admin_text += f"📱 **تلفن:** {phone_display}\n"
         admin_text += f"🆔 **ID:** `{user.telegram_id}`\n"
-        admin_text += f"💰 **مبلغ:** ${payment.amount}\n"
+        admin_text += f"💰 **مبلغ:** {amount_display}تومان\n"
         admin_text += f"💳 **روش:** {payment.payment_method}\n"
         if caption:
             admin_text += f"📝 **پیام:** {caption}\n"
@@ -209,6 +214,14 @@ class TelegramBot:
         ]
         await self.application.bot.set_my_commands(commands)
         
+        # Set bot description and short description
+        if settings.BOT_DESCRIPTION:
+            description = settings.BOT_DESCRIPTION.replace('\\n', '\n')
+            await self.application.bot.set_my_description(description)
+        if settings.BOT_SHORT_DESCRIPTION:
+            short_desc = settings.BOT_SHORT_DESCRIPTION.replace('\\n', '\n')
+            await self.application.bot.set_my_short_description(short_desc)
+        
     async def _restart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /restart command - same as /start"""
         await start_handler(update, context)
@@ -225,8 +238,10 @@ class TelegramBot:
         import os
         if os.getenv("ENVIRONMENT", "development") == "production":
             from app.services.payment_expiry_checker import check_expired_payments, check_expired_subscriptions
+            from app.services.abandoned_cart_reminder import check_abandoned_carts
             asyncio.create_task(check_expired_payments(self.application.bot))
             asyncio.create_task(check_expired_subscriptions(self.application.bot))
+            asyncio.create_task(check_abandoned_carts(self.application.bot))
             print("✅ Background tasks started")
         else:
             print("⚠️ Background tasks disabled in development mode")

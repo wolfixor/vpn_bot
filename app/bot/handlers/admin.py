@@ -19,7 +19,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     text = "🔑 **پنل مدیریت**\n\n"
-    text += "از دکمههای زیر استفاده کنید:"
+    text += "از گزینههای زیر استفاده کنید:"
     
     keyboard = [
         [InlineKeyboardButton("📊 آمار ربات", callback_data="admin_stats")],
@@ -66,7 +66,7 @@ async def handle_admin_callback(query, context):
         text += "• متن\n"
         text += "• عکس (با یا بدون متن)\n"
         text += "• ویدیو (با یا بدون متن)\n\n"
-        text += "پس از ارسال، دکمه تأیید نمایش داده میشود."
+        text += "پس از ارسال، گزینه تأیید نمایش داده میشود."
         
         await query.edit_message_text(text, parse_mode="Markdown")
     
@@ -90,14 +90,14 @@ async def handle_admin_callback(query, context):
             text += "✅ هیچ پرداخت معلقی وجود ندارد."
         else:
             for p in pending:
-                text += f"• ${p.amount} - User: `{p.user_telegram_id}`\n"
+                text += f"• تومان{p.amount / 1000} - User: `{p.user_telegram_id}`\n"
         
         keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     
     elif data == "admin_back":
         text = "🔑 **پنل مدیریت**\n\n"
-        text += "از دکمههای زیر استفاده کنید:"
+        text += "از گزینههای زیر استفاده کنید:"
         
         keyboard = [
             [InlineKeyboardButton("📊 آمار ربات", callback_data="admin_stats")],
@@ -222,7 +222,7 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
     elif broadcast_data["type"] == "video":
         text += f"ویدیو + متن: {broadcast_data['caption'] or 'بدون متن'}\n\n"
     
-    text += "برای تأیید دکمه زیر را بزنید:"
+    text += "برای تأیید گزینه زیر را بزنید:"
     
     keyboard = [
         [InlineKeyboardButton("✅ تأیید و ارسال", callback_data="broadcast_confirm")],

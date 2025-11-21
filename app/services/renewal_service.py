@@ -73,13 +73,16 @@ class RenewalService:
         order.expires_at = new_expiry
         await order.save()
         
+        # Get user from order to get subscription token
+        user = await order.user.fetch() if hasattr(order.user, 'fetch') else order.user
+        
         return {
             "success": True,
             "updated_configs": updated_configs,
             "failed_configs": failed_configs,
             "new_expiry": new_expiry,
             "new_traffic_limit_gb": new_total_limit / (1024**3) if new_total_limit else 0,
-            "subscription_url": f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription.user_telegram_id}"
+            "subscription_url": f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{user.subscription_token}"
         }
     
     async def get_active_subscriptions(self, user: User) -> list[Subscription]:

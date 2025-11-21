@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Bot Settings
     SUPPORT_USERNAME: str = "@support"
     BOT_ADMIN_IDS: str = "123456789,987654321"  # Comma-separated admin user IDs
+    BOT_NAME: str = "VPN Bot"
+    BOT_DESCRIPTION: str = ""
+    BOT_SHORT_DESCRIPTION: str = ""
     
     # VPN Service Settings
     DEFAULT_SUBSCRIPTION_DOMAIN: str = "https://yourbot.com"

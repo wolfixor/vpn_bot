@@ -19,11 +19,11 @@ class VPNService:
             "ip": "185.110.188.73",
             "flag": "🇩🇪"
         },
-        "turkey": {
-            "name": "Turkey",
-            "ip": "91.216.104.8",
-            "flag": "🇹🇷"
-        }
+        # "turkey": {
+        #     "name": "Turkey",
+        #     "ip": "91.216.104.8",
+        #     "flag": "🇹🇷"
+        # }
     }
     
     async def create_multi_panel_config(self, order: Order, config_name: str = None) -> Dict[str, Any]:

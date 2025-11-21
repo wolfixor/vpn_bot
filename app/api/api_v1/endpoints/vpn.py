@@ -22,23 +22,23 @@ async def get_vpn_plans():
 async def set_vpn_plans():
     sample_plans = [
         {
-            "name": "Basic Plan",
+            "name": "پلن برنزی",
             "duration_days": 30,
-            "price": 9.99,
+            "price": 250000,
             "traffic_limit_gb": 100,
             "is_active": True
         },        
         {
-            "name": "Premium Plan",
+            "name": "پلن نقره‌ای",
             "duration_days": 90,
-            "price": 19.99,
+            "price": 500000,
             "traffic_limit_gb": 200,
             "is_active": True
         },
         {
-            "name": "Enterprise Plan",
+            "name": "پلن طلایی",
             "duration_days": 180,
-            "price": 49.99,
+            "price": 1200000,
             "traffic_limit_gb": 500,
             "is_active": True
         }

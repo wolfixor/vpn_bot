@@ -23,6 +23,7 @@ class Payment(Document):
     admin_message_id: Optional[int] = None  # Message ID in payment channel
     confirmed_by: Optional[int] = None  # Admin telegram ID who confirmed
     confirmed_at: Optional[datetime] = None
+    reminder_sent: Optional[bool] = False  # Abandoned cart reminder sent
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)

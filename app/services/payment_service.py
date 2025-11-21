@@ -63,8 +63,8 @@ class PaymentService:
         
         if normalized_method == "card_to_card":
             text = f"💳 **پرداخت کارت به کارت**\n\n"
-            text += f"💰 **مبلغ:** ${payment.amount}\n"
-            text += f"🏦 **بانک:** {method_info['bank']}\n"
+            amount_display = int(payment.amount / 1000)
+            text += f"💰 **مبلغ:** {amount_display}تومان\n"
             text += f"💳 **شماره کارت:** `{method_info['address']}`\n"
             text += f"👤 **صاحب حساب:** {method_info['holder']}\n\n"
             text += "📋 **مراحل پرداخت:**\n"
@@ -76,7 +76,8 @@ class PaymentService:
             
         elif normalized_method == "crypto":
             text = f"₿ **پرداخت ارز دیجیتال**\n\n"
-            text += f"💰 **مبلغ:** ${payment.amount}\n\n"
+            amount_display = int(payment.amount / 1000)
+            text += f"💰 **مبلغ:** {amount_display}تومان\n\n"
             text += "📍 **آدرس‌های پرداخت:**\n"
             text += f"**USDT (TRC20):**\n`{method_info['Tether_address']}`\n\n"
             text += f"**TRON:**\n`{method_info['Tron_address']}`\n\n"
