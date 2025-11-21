@@ -588,16 +588,28 @@ async def show_config_options(query, config_email):
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-async def send_subscription_link(query, config_email):
-    """Send subscription link for config"""
+async def send_subscription_link(query, base_name):
+    """Send subscription link for specific subscription"""
     user = await User.find_one(User.telegram_id == query.from_user.id)
-    if not user or not user.subscription_token:
-        await query.answer("❌ لینک اشتراک یافت نشد", show_alert=True)
+    if not user:
+        await query.answer("❌ کاربر یافت نشد", show_alert=True)
         return
     
-    sub_url = f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{user.subscription_token}"
+    # Find subscription by base_name
+    subscription = None
+    for sub_link in user.subscriptions:
+        sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
+        if sub and sub.is_active and sub.base_name == base_name:
+            subscription = sub
+            break
     
-    text = f"📱 **لینک اشتراک شما:**\n\n`{sub_url}`\n\nتمام کانفیگ های شما در این لینک قرار دارند."
+    if not subscription:
+        await query.answer("❌ اشتراک یافت نشد", show_alert=True)
+        return
+    
+    sub_url = f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription.subscription_token}"
+    
+    text = f"📱 **لینک اشتراک شما:**\n\n`{sub_url}`\n\nکانفیگ های این اشتراک در این لینک قرار دارند."
     
     await query.message.reply_text(text, parse_mode="Markdown")
     await query.answer("✅ لینک ارسال شد")
