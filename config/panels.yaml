@@ -1,0 +1,59 @@
+panels:
+  server1:
+    name: "Germany"
+    direct_ip: "185.110.188.73"
+    url: "https://185.110.188.73:8585/40ddBvHqnvDfdbjB55"
+    flag: "🇩🇪"
+    enabled: true
+    max_users: 40  # Total subscriptions (direct + tunnel combined)
+    username_env: "GERMANY_PANEL_USERNAME"  # Environment variable name
+    password_env: "GERMANY_PANEL_PASSWORD"  # Environment variable name
+    # Capacity breakdown:
+    # - Direct configs: ~25 users (higher capacity)
+    # - Tunnel configs: ~15 users (lower capacity due to overhead)
+  server2:
+    name: "Turkey" 
+    direct_ip: "91.216.104.8"
+    url: "http://91.216.104.8:8585/X8KSu6hHzZeZMwp"
+    flag: "🇹🇷"
+    enabled: true
+    max_users: 40  # Total subscriptions (direct + tunnel combined)
+    username_env: "TURKEY_PANEL_USERNAME"  # Environment variable name
+    password_env: "TURKEY_PANEL_PASSWORD"  # Environment variable name
+  # server3:
+  #   name: "France"
+  #   direct_ip: "1.2.3.4"
+  #   url: "https://1.2.3.4:8585/newpanel"
+  #   flag: "🇫🇷"
+  #   enabled: true
+  #   max_users: 40  # Fresh server - 0 users initially
+
+# Global tunnel IPs - any inbound using these IPs is tunnel
+tunnel_ips:
+  - "62.3.42.11"
+
+# Global settings
+settings:
+  alert_threshold: 0.9  # Send alert at 90% capacity
+  never_stop_creation: true  # Always create users even if servers full
+  traffic_aggregation: true  # Aggregate traffic from all panels
+  balance_threshold: 3  # Auto-balance when difference > 3 users (lower = more sensitive)
+  
+# Load balancing notes:
+# - Panel Level: System tracks TOTAL subscriptions per server
+# - Each user gets configs from ONE selected server only (proper load balancing)
+# - Inbound Level: User gets ALL direct + 1 tunnel inbound from selected server
+# - Strategy: ALL direct inbounds + 1 least loaded tunnel inbound
+# - Direct inbounds: User gets ALL of them (maximum connectivity)
+# - Tunnel inbounds: User gets 1 least loaded (load balancing)
+# - New users go to lowest load server with capacity
+# - When server reaches capacity, users go to next available server
+
+# Example: Germany server with inbounds
+# - Inbound 1 (tunnel): 5 clients
+# - Inbound 2 (tunnel): 3 clients  <- User gets this (least loaded tunnel)
+# - Inbound 3 (tunnel): 7 clients
+# - Inbound 4 (direct): 4 clients  <- User gets this (ALL direct)
+# - Inbound 5 (direct): 6 clients  <- User gets this (ALL direct)
+# - Inbound 6 (direct): 2 clients  <- User gets this (ALL direct)
+# Result: User gets 4 configs (3 direct + 1 tunnel) for maximum connectivity

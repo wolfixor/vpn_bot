@@ -9,6 +9,7 @@ from app.bot.keyboards import (
     get_main_menu_keyboard, 
     get_channel_verification_keyboard,
     get_protocol_selection_keyboard,
+    get_duration_selection_keyboard,
     get_vpn_plans_keyboard, 
     get_delivery_options_keyboard,
     get_subscription_keyboard,
@@ -60,6 +61,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sub_id = data.replace("renew_sub_", "")
         from app.bot.handlers.renewal import show_renewal_plans
         await show_renewal_plans(query, context, sub_id)
+    elif data.startswith("renew_unlimited_"):
+        parts = data.replace("renew_unlimited_", "").split("_")
+        sub_id, duration_days, price = parts[0], parts[1], parts[2]
+        from app.bot.handlers.renewal import process_unlimited_renewal_payment
+        await process_unlimited_renewal_payment(query, context, sub_id, duration_days, price)
     elif data.startswith("renew_plan_"):
         parts = data.replace("renew_plan_", "").split("_")
         sub_id, plan_id = parts[0], parts[1]
@@ -70,7 +76,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("protocol_"):
         protocol = data.split("_")[1]
         context.user_data["selected_protocol"] = protocol
-        await show_vpn_plans(query, protocol)
+        await show_duration_selection(query, protocol)
+    elif data.startswith("duration_"):
+        duration = data.split("_")[1]
+        context.user_data["selected_duration"] = duration
+        protocol = context.user_data.get("selected_protocol", "v2ray")
+        await show_vpn_plans(query, protocol, int(duration))
     elif data.startswith("plan_"):
         plan_id = data.split("_")[1]
         context.user_data["selected_plan_id"] = plan_id
@@ -79,7 +90,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("payment_"):
         payment_method = data.replace("payment_", "", 1)
         # Check if this is a renewal payment
-        if context.user_data.get("renewing_subscription_id"):
+        if context.user_data.get("renewal_plan_id"):
             from app.bot.handlers.renewal import create_renewal_order
             await create_renewal_order(query, context, payment_method)
         else:
@@ -118,11 +129,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_main_menu(query)
     elif data == "back_to_protocols":
         await show_protocol_selection(query, context)
+    elif data == "back_to_duration":
+        protocol = context.user_data.get("selected_protocol", "v2ray")
+        await show_duration_selection(query, protocol)
     elif data == "back_to_plans":
         protocol = context.user_data.get("selected_protocol", "v2ray")
-        await show_vpn_plans(query, protocol)
+        duration = int(context.user_data.get("selected_duration", 1))
+        await show_vpn_plans(query, protocol, duration)
     elif data == "restart":
         await restart_bot(query, context)
+    elif data == "skip_coupon":
+        context.user_data["waiting_for_coupon"] = False
+        await show_payment_methods_callback(query)
     elif data.startswith("admin_") or data == "broadcast_confirm" or data == "broadcast_cancel":
         from app.bot.handlers.admin import handle_admin_callback
         await handle_admin_callback(query, context)
@@ -409,6 +427,7 @@ async def show_my_orders_message(update):
             status_persian = status_map.get(status_str, status_str)
             
             text += f"📦 {plan.name}\n"
+            text += f"🆔 Order ID: `{str(order.id)}`\n"
             text += f"💰 {int(order.price / 1000):,} تومان\n"
             text += f"🔧 {order.protocol.upper()}\n"
             text += f"📅 ایجاد: {order.created_at.strftime('%Y-%m-%d')}\n"
@@ -455,12 +474,19 @@ async def show_subscription_details(query, base_name):
     for config_item in subscription.configs:
         try:
             from app.services.xui_service import XUIService
-            panel_service = XUIService(config_item.panel_name.lower())
+            from app.core.panel_config import panel_config
+            
+            # Find panel dynamically by name
+            panel_key, panel_info = panel_config.get_panel_by_name(config_item.panel_name)
+            if not panel_key:
+                continue
+            
+            panel_service = XUIService(panel_key)
             stats = await panel_service.get_client_stats(config_item.inbound_id, config_item.client_email)
             if stats:
                 total_used += stats.get("down", 0) + stats.get("up", 0)
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Error syncing {config_item.client_email}: {e}")
     
     subscription.traffic_used = total_used
     await subscription.save()
@@ -469,20 +495,24 @@ async def show_subscription_details(query, base_name):
     expires_at = subscription.expires_at
     config_count = len(subscription.configs)
     
-    # Get plan name from order
+    # Get plan from subscription's order
     plan_name = "نامشخص"
+    plan_is_unlimited = False
     orders = await Order.find(Order.user.id == user.id).to_list()
-    if orders:
-        for order in orders:
-            try:
-                plan_link = order.vpn_plan
-                plan = await plan_link.fetch() if hasattr(plan_link, 'fetch') else plan_link
-                if plan and hasattr(plan, 'name'):
-                    plan_name = plan.name
-                    break
-            except Exception as e:
-                print(f"❌ Error fetching plan: {e}")
-                continue
+    for order in orders:
+        try:
+            if hasattr(order, 'panel_configs') and order.panel_configs:
+                for pc in order.panel_configs:
+                    pc_obj = await pc.fetch() if hasattr(pc, 'fetch') else pc
+                    if pc_obj and pc_obj.id == subscription.id:
+                        plan = await order.vpn_plan.fetch() if hasattr(order.vpn_plan, 'fetch') else order.vpn_plan
+                        if plan:
+                            plan_name = plan.name
+                            plan_is_unlimited = plan.traffic_limit_gb is None
+                        break
+        except Exception as e:
+            print(f"❌ Error fetching plan: {e}")
+            continue
     
     used_gb = total_used / (1024**3)
     limit_gb = total_limit / (1024**3) if total_limit else 0
@@ -496,11 +526,15 @@ async def show_subscription_details(query, base_name):
     text = f"📊 **اشتراک: {escaped_name}**\n\n"
     text += f"📦 **پلن:** {plan_name}\n"
     text += f"• مصرف شده: {round(used_gb, 2)}GB\n"
-    if limit_gb:
+    
+    if plan_is_unlimited:
+        text += f"• حجم: نامحدود\n"
+    elif limit_gb:
         text += f"• کل حجم: {limit_gb}GB\n"
         if remaining_gb != float('inf'):
             text += f"• باقیمانده: {round(remaining_gb, 2)}GB\n"
         text += f"• درصد مصرف: {usage_percent}%\n"
+    
     text += f"• روزهای باقیمانده: {days_remaining}\n"
     text += f"• کانفیگ ها: {config_count}\n\n"
     text += "🔄 **به روزرسانی:** اطلاعات به صورت خودکار به روزرسانی میشود"
@@ -699,8 +733,8 @@ async def show_protocol_selection(query, context=None):
         await query.message.delete()
         await query.message.reply_text(text, reply_markup=get_protocol_selection_keyboard(), parse_mode="Markdown")
 
-async def show_vpn_plans(query, protocol):
-    """Show available VPN plans"""
+async def show_duration_selection(query, protocol):
+    """Show duration selection"""
     if protocol != "v2ray":
         text = f"🚧 **{protocol.upper()} به زودی**\n\n"
         text += "این پروتکل هنوز در دسترس نیست.\n"
@@ -708,20 +742,45 @@ async def show_vpn_plans(query, protocol):
         await query.edit_message_text(text, reply_markup=get_protocol_selection_keyboard(), parse_mode="Markdown")
         return
     
-    plans = await VPNPlan.find(VPNPlan.is_active == True).to_list()
+    text = "📅 **مدت اشتراک را انتخاب کنید**\n\n"
+    text += "🌍 **سیستم مولتی لوکیشن:**\n"
+    text += "• سرورهای آلمان 🇩🇪، ترکیه 🇹🇷\n"
+    text += "• تمام پروتکلها در یک اشتراک\n"
+    text += "• لود بلنسینگ هوشمند\n\n"
+    text += "مدت مورد نظر خود را انتخاب کنید:"
+    
+    await query.edit_message_text(text, reply_markup=get_duration_selection_keyboard(), parse_mode="Markdown")
+
+async def show_vpn_plans(query, protocol, duration_months):
+    """Show available VPN plans for selected duration"""
+    # Filter plans by duration
+    duration_days = duration_months * 30
+    plans = await VPNPlan.find(
+        VPNPlan.is_active == True,
+        VPNPlan.duration_days == duration_days
+    ).to_list()
     
     if not plans:
-        await query.edit_message_text(f"هیچ پلن VPN در دسترس نیست. لطفاً با پشتیبانی تماس بگیرید.\n{settings.SUPPORT_USERNAME}", parse_mode="Markdown")
+        await query.edit_message_text(
+            f"هیچ پلن {duration_months} ماهه در دسترس نیست.\n{settings.SUPPORT_USERNAME}",
+            parse_mode="Markdown"
+        )
         return
     
-    text = f"📦 **پلن های V2Ray**\n\n"
-    text += "🌍 **سیستم مولتی لوکیشن:**\n"
-    text += "• سرورهای آلمان 🇩🇪، ترکیه 🇹🇷 و سایر کشورها\n"
-    text += "• تمام پروتکلها در یک اشتراک\n"
-    text += "• ترافیک مشترک بین تمام سرورها\n\n"
-    text += "یک پلن انتخاب کنید:"
+    text = f"📦 **پلن های {duration_months} ماهه**\n\n"
+    text += "💰 **قیمت ها:**\n"
+    for plan in plans:
+        traffic = f"{plan.traffic_limit_gb}GB" if plan.traffic_limit_gb else "نامحدود"
+        price = int(plan.price / 1000)
+        text += f"• {traffic}: {price:,} تومان\n"
     
-    await query.edit_message_text(text, reply_markup=get_vpn_plans_keyboard(plans), parse_mode="Markdown")
+    text += "\n🌍 **ویژگی ها:**\n"
+    text += "• چندین سرور خارجی\n"
+    text += "• لود بلنسینگ خودکار\n"
+    text += "• تمام پروتکلها\n\n"
+    text += "پلن مورد نظر خود را انتخاب کنید:"
+    
+    await query.edit_message_text(text, reply_markup=get_vpn_plans_keyboard(plans, duration_months), parse_mode="Markdown")
 
 async def show_delivery_options(query):
     """Show delivery options"""
@@ -747,6 +806,18 @@ async def ask_config_name(query):
     text += "💡 **نکته:** نام باید فقط انگلیسی و حداکثر 20 کاراکتر باشد."
     
     await query.edit_message_text(text, parse_mode="Markdown")
+
+async def ask_coupon_code(update):
+    """Ask user for coupon code"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    text = "🎁 **کد تخفیف دارید؟**\n\n"
+    text += "اگر کد تخفیف دارید، آن را تایپ کنید.\n"
+    text += "اگر ندارید، روی دکمه زیر کلیک کنید."
+    
+    keyboard = [[InlineKeyboardButton("⏭️ بدون کد ادامه بده", callback_data="skip_coupon")]]
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 async def handle_config_name_input(update, context):
     """Handle user's config name input"""
@@ -783,8 +854,9 @@ async def handle_config_name_input(update, context):
     context.user_data["config_name"] = config_name
     context.user_data["waiting_for_config_name"] = False
     
-    # Show payment methods
-    await show_payment_methods(update)
+    # Ask for coupon code
+    context.user_data["waiting_for_coupon"] = True
+    await ask_coupon_code(update)
 
 async def show_payment_methods(update):
     """Show payment method selection"""
@@ -801,6 +873,21 @@ async def show_payment_methods(update):
     
     await update.message.reply_text(text, reply_markup=get_payment_methods_keyboard(), parse_mode="Markdown")
 
+async def show_payment_methods_callback(query):
+    """Show payment method selection for callback query"""
+    text = "💳 **روش پرداخت را انتخاب کنید**\n\n"
+    text += "💳 **کارت به کارت**\n"
+    text += "• پرداخت با کارت بانکی\n"
+    text += "• تأیید سریع (حداکثر 2 ساعت)\n"
+    text += "• پشتیبانی از تمام بانکها\n\n"
+    text += "₿ **ارز دیجیتال**\n"
+    text += "• Bitcoin, USDT, Ethereum\n"
+    text += "• ناشناس و امن\n"
+    text += "• تأیید خودکار\n\n"
+    text += "روش پرداخت مورد نظر خود را انتخاب کنید:"
+    
+    await query.edit_message_text(text, reply_markup=get_payment_methods_keyboard(), parse_mode="Markdown")
+
 async def create_payment_request(query, context, payment_method):
     """Create payment request"""
     print(f"🔍 Payment method received: {payment_method}")
@@ -808,6 +895,7 @@ async def create_payment_request(query, context, payment_method):
     plan_id = context.user_data.get("selected_plan_id")
     protocol = context.user_data.get("selected_protocol", "v2ray")
     delivery_type = context.user_data.get("delivery_type", "subscription")
+    coupon_code = context.user_data.get("coupon_code")
     
     if not plan_id:
         keyboard = [[InlineKeyboardButton("🔄 شروع مجدد", callback_data="restart")]]
@@ -825,12 +913,25 @@ async def create_payment_request(query, context, payment_method):
     
     plan = await VPNPlan.get(plan_id)
     
+    # Apply coupon if provided
+    final_price = plan.price
+    discount_amount = 0
+    if coupon_code:
+        from app.models.coupon import Coupon
+        coupon = await Coupon.find_one(Coupon.code == coupon_code)
+        if coupon and coupon.is_valid():
+            discount_amount = coupon.calculate_discount(plan.price)
+            final_price = plan.price - discount_amount
+    
     from app.models.order import OrderStatus
     order = Order(
         user=user,
         vpn_plan=plan,
         protocol=protocol,
-        price=plan.price,
+        price=final_price,
+        original_price=plan.price if coupon_code else None,
+        coupon_code=coupon_code,
+        discount_amount=discount_amount if coupon_code else None,
         status=OrderStatus.PAYMENT_PENDING
     )
     await order.save()
@@ -865,17 +966,38 @@ async def confirm_payment_admin(query, context, payment_id):
     # Get order and create VPN configs
     order = await Order.get(payment.order_id)
     
+    # Track coupon usage
+    if order.coupon_code:
+        from app.models.coupon import Coupon, CouponUsage
+        coupon = await Coupon.find_one(Coupon.code == order.coupon_code)
+        if coupon:
+            coupon.current_uses += 1
+            coupon.total_discount_given += order.discount_amount
+            coupon.total_revenue += order.price
+            await coupon.save()
+            
+            usage = CouponUsage(
+                coupon_code=order.coupon_code,
+                user=order.user,
+                vpn_plan=order.vpn_plan,
+                order_id=str(order.id),
+                discount_amount=order.discount_amount,
+                original_price=order.original_price,
+                final_price=order.price
+            )
+            await usage.insert()
+    
     # Get config name from order's user context (stored during payment creation)
     config_name = context.bot_data.get(f"config_name_{payment.user_telegram_id}")
     
     # Create VPN subscription
-    result = await vpn_service.create_multi_panel_config(order, config_name)
+    result = await vpn_service.create_subscription(order, config_name)
     
     # Send subscription link to user (always)
     user = await User.find_one(User.telegram_id == payment.user_telegram_id)
     
     if result and result.get("total_configs", 0) > 0:
-        await send_subscription_to_user(context, user, result, order.vpn_plan)
+        await send_subscription_to_user(context, user, result, order.vpn_plan, str(order.id))
     
     # Update admin message (edit caption since it's a photo message)
     try:
@@ -917,17 +1039,28 @@ async def reject_payment_admin(query, context, payment_id):
     except Exception as e:
         print(f"❌ Error updating admin message: {e}")
 
-async def send_subscription_to_user(context, user, result, plan):
+async def send_subscription_to_user(context, user, result, plan, order_id=None):
     """Send subscription URL to user"""
-    # Fetch plan if it's a Link object
     if hasattr(plan, 'fetch'):
         plan = await plan.fetch()
+    
+    # Display traffic
+    if result.get('display_traffic'):
+        traffic_text = f"{result['display_traffic']}GB"
+    else:
+        traffic_text = "نامحدود"
     
     text = "✅ **پرداخت تأیید شد! اشتراک VPN آماده است**\n\n"
     text += f"📦 **پلن:** {plan.name}\n"
     text += f"💰 **قیمت:** {int(plan.price / 1000):,} تومان\n"
+    text += f"📊 **حجم:** {traffic_text}\n"
     text += f"🌍 **تعداد کانفیگ:** {result['total_configs']}\n"
     text += f"⏱️ **مدت:** {plan.duration_days} روز\n\n"
+    
+    if order_id:
+        text += f"🆔 **Order ID:** `{order_id}`\n"
+        text += "💡 این شناسه را برای پشتیبانی نگه دارید\n\n"
+    
     text += "📱 **لینک اشتراک:**\n"
     text += f"`{result['subscription_url']}`\n\n"
     text += "📝 **نکته:** اگر لینک کار نکرد، کانفیگ ها را از گزینه 'کانفیگ های من' دریافت کنید\n"
@@ -964,33 +1097,8 @@ async def send_individual_configs(query, context, base_name):
     for sub_link in user.subscriptions:
         subscription = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
         if subscription and subscription.is_active and subscription.base_name == base_name:
-            from app.services.vpn_service import vpn_service
-            await vpn_service.sync_subscription_to_new_panels(subscription)
-            print(f"✅ Found subscription: {subscription.base_name} with {len(subscription.configs)} configs")
-            
-            from app.services.xui_service import XUIService
-            
-            for config_item in subscription.configs:
-                # Get panel info
-                panel_info = None
-                for pname, pinfo in vpn_service.ENABLED_PANELS.items():
-                    if pinfo['name'] == config_item.panel_name:
-                        panel_info = pinfo
-                        break
-                
-                if panel_info:
-                    try:
-                        panel_service = XUIService(pname)
-                        inbounds_response = await panel_service.get_inbounds()
-                        if inbounds_response and inbounds_response.get("success"):
-                            for inbound_data in inbounds_response.get("obj", []):
-                                if inbound_data["id"] == config_item.inbound_id:
-                                    config_url = vpn_service.generate_config_url_from_item(config_item, inbound_data, panel_info['ip'])
-                                    if config_url:
-                                        configs.append({"config": config_url, "flag": panel_info['flag']})
-                                    break
-                    except Exception as e:
-                        print(f"❌ Error generating config: {e}")
+            configs = await vpn_service.get_user_configs(subscription.subscription_token)
+            configs = [{"config": cfg, "flag": "🌍"} for cfg in configs]
             break
     
     print(f"📊 Total configs found: {len(configs)}")
@@ -1072,7 +1180,8 @@ async def show_my_orders(query):
             status_persian = status_map.get(status_str, status_str)
             
             text += f"📦 {plan.name}\n"
-            text += f"💰 {order.price / 1000}تومان\n"
+            text += f"🆔 Order ID: `{str(order.id)}`\n"
+            text += f"💰 {int(order.price / 1000):,} تومان\n"
             text += f"🔧 {order.protocol.upper()}\n"
             text += f"📅 ایجاد: {order.created_at.strftime('%Y-%m-%d')}\n"
             text += f"📊 وضعیت: {status_persian}\n"

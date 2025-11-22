@@ -12,6 +12,13 @@ async def lifespan(app: FastAPI):
     await connect_to_mongo()
     await init_db()
     
+    # Start background services
+    from app.services.subscription_cleanup import start_subscription_cleanup
+    from app.services.load_balancer import start_load_balancer_sync
+    
+    await start_subscription_cleanup()
+    await start_load_balancer_sync()
+    
     # Start Telegram bot if token is provided
     if settings.TELEGRAM_BOT_TOKEN:
         asyncio.create_task(bot.start())

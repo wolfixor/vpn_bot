@@ -352,3 +352,119 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"⏳ پرداختهای معلق: {pending_payments}\n"
     
     await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def migrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Migrate users between panels - Admin only"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ شما دسترسی ندارید.")
+        return
+    
+    if len(context.args) < 3:
+        text = "🔄 **مهاجرت کاربران**\n\n"
+        text += "**استفاده:**\n"
+        text += "/migrate <source_panel> <target_panel> <max_users>\n\n"
+        text += "**مثال:**\n"
+        text += "/migrate Germany server2 10"
+        await update.message.reply_text(text, parse_mode="Markdown")
+        return
+    
+    source_panel = context.args[0]
+    target_panel = context.args[1]
+    max_users = int(context.args[2])
+    
+    progress_msg = await update.message.reply_text(
+        f"⏳ در حال مهاجرت {max_users} کاربر از {source_panel} به {target_panel}..."
+    )
+    
+    try:
+        from app.services.migration_service import migration_service
+        result = await migration_service.migrate_users_from_panel(source_panel, target_panel, max_users)
+        
+        if result.get("success"):
+            text = f"✅ **مهاجرت کامل شد!**\n\n"
+            text += f"📊 گزارش:\n"
+            text += f"• تلاش شده: {result['total_attempted']}\n"
+            text += f"• موفق: {result['successful_migrations']}\n"
+            text += f"• ناموفق: {result['failed_migrations']}"
+        else:
+            text = f"❌ **مهاجرت ناموفق:** {result.get('error')}"
+        
+        await progress_msg.edit_text(text, parse_mode="Markdown")
+        
+    except Exception as e:
+        await progress_msg.edit_text(f"❌ خطا: {str(e)}")
+
+
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تعادل خودکار سرورها - Admin only"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ شما دسترسی ندارید.")
+        return
+    
+    progress_msg = await update.message.reply_text(
+        "⏳ در حال تعادل سرورها..."
+    )
+    
+    try:
+        from app.services.migration_service import migration_service
+        result = await migration_service.balance_servers()
+        
+        if result.get("success"):
+            text = f"✅ **تعادل کامل شد!**\n\n"
+            text += f"📊 گزارش:\n"
+            text += f"• کل مهاجرتها: {result['total_migrations']}\n\n"
+            
+            for migration in result['migrations']:
+                text += f"• {migration['from']} → {migration['to']}: {migration['attempted']} کاربر\n"
+        else:
+            text = f"❌ **تعادل ناموفق:** {result.get('error')}"
+        
+        await progress_msg.edit_text(text, parse_mode="Markdown")
+        
+    except Exception as e:
+        await progress_msg.edit_text(f"❌ خطا: {str(e)}")
+
+
+async def inbound_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show inbound load statistics - Admin only"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ شما دسترسی ندارید.")
+        return
+    
+    from app.services.inbound_balancer import inbound_balancer
+    from app.core.panel_config import panel_config
+    
+    progress_msg = await update.message.reply_text("⏳ در حال دریافت آمار inbound ها...")
+    
+    try:
+        enabled_panels = panel_config.get_enabled_panels()
+        text = "📊 **آمار Inbound ها**\n\n"
+        
+        for panel_key, panel_info in enabled_panels.items():
+            stats = await inbound_balancer.get_inbound_load_stats(panel_key)
+            
+            if not stats:
+                continue
+            
+            text += f"🏢 **{stats['panel_name']}** ({panel_info['flag']})\n"
+            text += f"👥 کل کاربران: {stats['total_clients']}\n\n"
+            
+            if stats['tunnel_inbounds']:
+                text += "🔗 **Tunnel Inbounds:**\n"
+                for inbound in stats['tunnel_inbounds']:
+                    text += f"  • ID {inbound['id']} ({inbound['protocol']}:{inbound['port']}): {inbound['client_count']} کاربر\n"
+                text += "\n"
+            
+            if stats['direct_inbounds']:
+                text += "🎯 **Direct Inbounds:**\n"
+                for inbound in stats['direct_inbounds']:
+                    text += f"  • ID {inbound['id']} ({inbound['protocol']}:{inbound['port']}): {inbound['client_count']} کاربر\n"
+                text += "\n"
+            
+            text += "─" * 30 + "\n\n"
+        
+        await progress_msg.edit_text(text, parse_mode="Markdown")
+        
+    except Exception as e:
+        await progress_msg.edit_text(f"❌ خطا: {str(e)}")

@@ -6,7 +6,8 @@ class VPNPlan(Document):
     name: str
     duration_days: int
     price: float
-    traffic_limit_gb: Optional[int] = None  # None = unlimited
+    traffic_limit_gb: Optional[int] = None  # None = unlimited (shows unlimited to user)
+    estimated_traffic_gb: Optional[int] = None  # Background limit for unlimited plans
     max_connections: int = 1
     is_active: bool = True
     description: Optional[str] = None

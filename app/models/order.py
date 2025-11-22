@@ -20,6 +20,9 @@ class Order(Document):
     vpn_plan: Link[VPNPlan]
     status: OrderStatus = OrderStatus.PENDING
     price: float
+    original_price: Optional[float] = None
+    coupon_code: Optional[str] = None
+    discount_amount: Optional[float] = None
     
     # Multi-panel support
     protocol: str = "vless"  # "vless", "vmess", "trojan", "wireguard"

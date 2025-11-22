@@ -29,11 +29,14 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("restart", self._restart_command))
         
         # Admin commands
-        from app.bot.handlers.admin import broadcast_command, confirm_broadcast, stats_command, admin_panel
+        from app.bot.handlers.admin import broadcast_command, confirm_broadcast, stats_command, admin_panel, migrate_command, balance_command, inbound_stats_command
         self.application.add_handler(CommandHandler("broadcast", broadcast_command))
         self.application.add_handler(CommandHandler("confirm", confirm_broadcast))
         self.application.add_handler(CommandHandler("stats", stats_command))
         self.application.add_handler(CommandHandler("admin", admin_panel))
+        self.application.add_handler(CommandHandler("migrate", migrate_command))
+        self.application.add_handler(CommandHandler("balance", balance_command))
+        self.application.add_handler(CommandHandler("inbounds", inbound_stats_command))
         
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(button_handler))
@@ -62,7 +65,9 @@ class TelegramBot:
         """Handle /status command"""
         text = "📊 **وضعیت ربات**\n\n"
         text += "✅ ربات در حال اجرا است\n"
-        text += f"🌍 پنلها: {len(vpn_service.ENABLED_PANELS)}\n"
+        from app.core.panel_config import panel_config
+        enabled_count = len(panel_config.get_enabled_panels())
+        text += f"🌍 پنلها: {enabled_count}\n"
         text += f"🔧 پروتکلها: تشخیص خودکار (VLESS, Trojan, VMess, و غیره)\n"
         text += f"📱 سیستم چند پنله فعال\n\n"
         text += "از /start برای شروع استفاده کنید!"
@@ -96,6 +101,10 @@ class TelegramBot:
             if context.user_data.get("waiting_for_config_name"):
                 from app.bot.handlers.start import handle_config_name_input
                 await handle_config_name_input(update, context)
+            # Check if user is entering coupon code
+            elif context.user_data.get("waiting_for_coupon"):
+                from app.bot.handlers.coupon import handle_coupon_input
+                await handle_coupon_input(update, context)
             # Check if admin is entering broadcast message
             elif context.user_data.get("waiting_for_broadcast"):
                 from app.bot.handlers.admin import handle_broadcast_message
@@ -238,10 +247,8 @@ class TelegramBot:
         import os
         if os.getenv("ENVIRONMENT", "development") == "production":
             from app.services.payment_expiry_checker import check_expired_payments, check_expired_subscriptions
-            from app.services.abandoned_cart_reminder import check_abandoned_carts
             asyncio.create_task(check_expired_payments(self.application.bot))
             asyncio.create_task(check_expired_subscriptions(self.application.bot))
-            asyncio.create_task(check_abandoned_carts(self.application.bot))
             print("✅ Background tasks started")
         else:
             print("⚠️ Background tasks disabled in development mode")

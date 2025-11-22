@@ -30,8 +30,19 @@ class RenewalService:
             new_expiry = current_expiry + timedelta(days=plan.duration_days)
         
         # Calculate new traffic limit
-        additional_traffic = plan.traffic_limit_gb * 1024 * 1024 * 1024 if plan.traffic_limit_gb else 0
-        new_total_limit = (subscription.total_limit or 0) + additional_traffic
+        if plan.traffic_limit_gb is None:
+            # Unlimited plan: recalculate based on total duration
+            total_days = (new_expiry - datetime.utcnow()).days
+            if total_days <= 30:
+                new_total_limit = 200 * 1024 * 1024 * 1024
+            elif total_days <= 60:
+                new_total_limit = 400 * 1024 * 1024 * 1024
+            else:
+                new_total_limit = 800 * 1024 * 1024 * 1024
+        else:
+            # Limited plan: add traffic
+            additional_traffic = plan.traffic_limit_gb * 1024 * 1024 * 1024
+            new_total_limit = (subscription.total_limit or 0) + additional_traffic
         
         # Update all configs in all panels
         updated_configs = 0
@@ -39,9 +50,15 @@ class RenewalService:
         
         for config_item in subscription.configs:
             try:
-                # Get panel service
-                panel_name_lower = config_item.panel_name.lower()
-                panel_service = XUIService(panel_name_lower)
+                from app.core.panel_config import panel_config
+                
+                # Find panel dynamically by name
+                panel_key, panel_info = panel_config.get_panel_by_name(config_item.panel_name)
+                if not panel_key:
+                    failed_configs.append(config_item.client_email)
+                    continue
+                
+                panel_service = XUIService(panel_key)
                 
                 # Update client with new limits
                 expiry_timestamp = int(new_expiry.timestamp() * 1000)
@@ -93,6 +110,23 @@ class RenewalService:
         
         return active_subs
     
+    async def is_unlimited_subscription(self, subscription: Subscription) -> bool:
+        """Check if subscription is unlimited by finding original plan"""
+        try:
+            orders = await Order.find().to_list()
+            for order in orders:
+                if hasattr(order, 'panel_configs') and order.panel_configs:
+                    for pc in order.panel_configs:
+                        pc_obj = await pc.fetch() if hasattr(pc, 'fetch') else pc
+                        if pc_obj and pc_obj.id == subscription.id:
+                            plan = await order.vpn_plan.fetch() if hasattr(order.vpn_plan, 'fetch') else order.vpn_plan
+                            if plan:
+                                return plan.traffic_limit_gb is None
+            return False
+        except Exception as e:
+            print(f"❌ Error checking unlimited status: {e}")
+            return False
+    
     async def check_renewal_eligibility(self, subscription: Subscription) -> Dict[str, Any]:
         """Check if subscription can be renewed"""
         now = datetime.utcnow()
@@ -108,7 +142,10 @@ class RenewalService:
         # Check traffic remaining
         traffic_used_gb = (subscription.traffic_used or 0) / (1024**3)
         traffic_limit_gb = (subscription.total_limit or 0) / (1024**3)
-        traffic_remaining_gb = max(0, traffic_limit_gb - traffic_used_gb) if traffic_limit_gb else float('inf')
+        
+        # Check if unlimited
+        is_unlimited = await self.is_unlimited_subscription(subscription)
+        traffic_remaining_gb = float('inf') if is_unlimited else max(0, traffic_limit_gb - traffic_used_gb)
         
         return {
             "can_renew": True,  # Always allow renewal

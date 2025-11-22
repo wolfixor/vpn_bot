@@ -22,10 +22,12 @@ async def init_db():
     from app.models.order import Order
     from app.models.payment import Payment
     from app.models.subscription import Subscription
+    from app.models.server_load import ServerLoad
+    from app.models.coupon import Coupon, CouponUsage
     
     await init_beanie(
         database=db.client[settings.DATABASE_NAME],
-        document_models=[User, VPNPlan, Order, Payment, Subscription]
+        document_models=[User, VPNPlan, Order, Payment, Subscription, ServerLoad, Coupon, CouponUsage]
     )
     
     

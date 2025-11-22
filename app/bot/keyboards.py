@@ -29,17 +29,27 @@ def get_protocol_selection_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_vpn_plans_keyboard(plans):
-    """VPN plans selection keyboard"""
+def get_duration_selection_keyboard():
+    """Duration selection keyboard"""
+    keyboard = [
+        [InlineKeyboardButton("📅 1 ماهه", callback_data="duration_1")],
+        [InlineKeyboardButton("📅 2 ماهه", callback_data="duration_2")],
+        [InlineKeyboardButton("📅 3 ماهه", callback_data="duration_3")],
+        [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_protocols")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_vpn_plans_keyboard(plans, duration_months):
+    """VPN plans selection keyboard with prices"""
     keyboard = []
     for plan in plans:
-        traffic = f"{plan.traffic_limit_gb}گیگ" if plan.traffic_limit_gb else "نامحدود"
+        traffic = f"{plan.traffic_limit_gb}GB" if plan.traffic_limit_gb else "نامحدود"
         price = int(plan.price / 1000)
-        text = f"📦 {plan.name} - {price:,} تومان ({traffic})"
+        text = f"{traffic} - {price:,} تومان"
         callback_data = f"plan_{plan.id}"
         keyboard.append([InlineKeyboardButton(text, callback_data=callback_data)])
     
-    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_protocols")])
+    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_duration")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_delivery_options_keyboard():

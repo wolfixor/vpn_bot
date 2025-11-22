@@ -2,44 +2,29 @@ import httpx
 import json
 from typing import Dict, Any, Optional
 from app.core.config import settings
+from app.core.panel_config import panel_config
 
 class XUIService:
-    # Simple panel configuration
-    PANEL_CONFIG = {
-        "germany": {
-            "url": "https://185.110.188.73:8585/40ddBvHqnvDfdbjB55",
-            "ip": "185.110.188.73"
-        },
-        "turkey": {
-            "url": "http://91.216.104.8:8585/X8KSu6hHzZeZMwp",
-            "ip": "91.216.104.8"
-        }
-    }
-    
-    def __init__(self, panel_name: str = None):
-        if not panel_name:
-            raise ValueError("Panel name is required")
-            
-        panel_name = panel_name.lower()
-        if panel_name not in self.PANEL_CONFIG:
-            raise ValueError(f"Panel '{panel_name}' not found in configuration")
-            
-        panel_info = self.PANEL_CONFIG[panel_name]
-        self.panel_name = panel_name
-        self.base_url = panel_info["url"].rstrip('/')
-        self.panel_ip = panel_info["ip"]
+    def __init__(self, panel_key: str = None):
+        if not panel_key:
+            raise ValueError("Panel key is required")
         
-        # Get panel-specific credentials
-        if panel_name == "germany":
-            self.username = settings.GERMANY_PANEL_USERNAME
-            self.password = settings.GERMANY_PANEL_PASSWORD
-        elif panel_name == "turkey":
-            self.username = settings.TURKEY_PANEL_USERNAME
-            self.password = settings.TURKEY_PANEL_PASSWORD
-        else:
-            # Default credentials for unknown panels
-            self.username = "admin"
-            self.password = "password"
+        # Get panel info from YAML config
+        panel_info = panel_config.get_panel(panel_key)
+        if not panel_info:
+            raise ValueError(f"Panel '{panel_key}' not found in configuration")
+        
+        self.panel_key = panel_key
+        self.panel_name = panel_info['name']
+        self.base_url = panel_info['url'].rstrip('/')
+        self.panel_ip = panel_info['direct_ip']
+        
+        # Get panel-specific credentials from environment variables
+        username_env = panel_info.get('username_env', 'PANEL_USERNAME')
+        password_env = panel_info.get('password_env', 'PANEL_PASSWORD')
+        
+        self.username = getattr(settings, username_env, "admin")
+        self.password = getattr(settings, password_env, "password")
         
         self.session_cookie = None
     
@@ -255,6 +240,30 @@ class XUIService:
         if result and result.get("success"):
             return result.get("obj", {})
         return None
+    
+    async def get_clients(self, inbound_id: int) -> Optional[Dict[str, Any]]:
+        """Get all clients from an inbound"""
+        cookie = await self.login()
+        if not cookie:
+            return None
+        
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.get(
+                f"{self.base_url}/panel/api/inbounds/get/{inbound_id}",
+                cookies={"3x-ui": cookie}
+            )
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    inbound_data = result.get("obj", {})
+                    settings_str = inbound_data.get("settings", "{}")
+                    try:
+                        settings = json.loads(settings_str)
+                        clients = settings.get("clients", [])
+                        return {"success": True, "obj": clients}
+                    except:
+                        return {"success": False, "obj": []}
+            return None
     
     async def create_inbound(self, inbound_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create new inbound"""

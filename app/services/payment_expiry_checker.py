@@ -63,12 +63,17 @@ async def check_expired_subscriptions(bot):
                     total_used = 0
                     for config_item in sub.configs:
                         try:
-                            panel_service = XUIService(config_item.panel_name.lower())
+                            from app.core.panel_config import panel_config
+                            panel_key, panel_info = panel_config.get_panel_by_name(config_item.panel_name)
+                            if not panel_key:
+                                continue
+                            
+                            panel_service = XUIService(panel_key)
                             stats = await panel_service.get_client_stats(config_item.inbound_id, config_item.client_email)
                             if stats:
                                 total_used += stats.get("down", 0) + stats.get("up", 0)
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"❌ Error syncing traffic for {config_item.client_email}: {e}")
                     
                     sub.traffic_used = total_used
                     await sub.save()
@@ -123,10 +128,15 @@ async def disable_subscription(bot, subscription: Subscription, reason: str):
     # Disable all configs in panels
     for config_item in subscription.configs:
         try:
-            panel_service = XUIService(config_item.panel_name.lower())
+            from app.core.panel_config import panel_config
+            panel_key, panel_info = panel_config.get_panel_by_name(config_item.panel_name)
+            if not panel_key:
+                continue
+            
+            panel_service = XUIService(panel_key)
             await panel_service.delete_client(config_item.inbound_id, config_item.client_uuid)
-        except:
-            pass
+        except Exception as e:
+            print(f"❌ Error deleting config {config_item.client_email}: {e}")
     
     # Notify user
     user = await User.find_one({"subscriptions": subscription.id})
