@@ -25,6 +25,10 @@ class Payment(Document):
     confirmed_at: Optional[datetime] = None
     reminder_sent: Optional[bool] = False  # Abandoned cart reminder sent
     
+    # Renewal tracking
+    is_renewal: bool = False
+    renewal_subscription_id: Optional[str] = None
+    
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = None

@@ -31,14 +31,14 @@ class RenewalService:
         
         # Calculate new traffic limit
         if plan.traffic_limit_gb is None:
-            # Unlimited plan: recalculate based on total duration
-            total_days = (new_expiry - datetime.utcnow()).days
-            if total_days <= 30:
-                new_total_limit = 200 * 1024 * 1024 * 1024
-            elif total_days <= 60:
-                new_total_limit = 400 * 1024 * 1024 * 1024
+            # Unlimited plan: add estimated traffic for renewal period
+            if plan.duration_days <= 30:
+                additional_traffic = 200 * 1024 * 1024 * 1024  # 200GB for 30 days
+            elif plan.duration_days <= 60:
+                additional_traffic = 400 * 1024 * 1024 * 1024  # 400GB for 60 days
             else:
-                new_total_limit = 800 * 1024 * 1024 * 1024
+                additional_traffic = 800 * 1024 * 1024 * 1024  # 800GB for 90 days
+            new_total_limit = (subscription.total_limit or 0) + additional_traffic
         else:
             # Limited plan: add traffic
             additional_traffic = plan.traffic_limit_gb * 1024 * 1024 * 1024

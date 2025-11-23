@@ -28,6 +28,14 @@ async def show_renewal_subscriptions(query, context):
 
 async def show_renewal_plans(query, context, sub_id):
     """Show plans for renewal"""
+    print(f"🔍 show_renewal_plans called with sub_id: {sub_id}")
+    
+    # Clear old renewal context data
+    context.user_data.pop("renewal_duration_days", None)
+    context.user_data.pop("renewal_price", None)
+    context.user_data.pop("is_unlimited_renewal", None)
+    context.user_data.pop("renewal_plan_id", None)
+    
     subscription = await Subscription.get(sub_id)
     eligibility = await renewal_service.check_renewal_eligibility(subscription)
     
@@ -81,10 +89,22 @@ async def process_unlimited_renewal_payment(query, context, sub_id, duration_day
     context.user_data["renewal_price"] = price
     context.user_data["is_unlimited_renewal"] = True
     
+    print(f"🔍 Setting renewal payment for sub_id: {sub_id}")
+    
     text = "💳 **روش پرداخت را انتخاب کنید**\n\n"
     text += "برای تمدید اشتراک، روش پرداخت خود را انتخاب کنید:"
     
-    await query.edit_message_text(text, reply_markup=get_payment_methods_keyboard(), parse_mode="Markdown")
+    # Custom keyboard with back to renewal plans
+    back_callback = f"renew_sub_{sub_id}"
+    print(f"🔍 Back button callback: {back_callback}")
+    
+    keyboard = [
+        [InlineKeyboardButton("💳 کارت به کارت", callback_data="payment_card_to_card")],
+        [InlineKeyboardButton("₿ ارز دیجیتال", callback_data="payment_crypto")],
+        [InlineKeyboardButton("⬅️ بازگشت", callback_data=back_callback)]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 
 async def process_renewal_payment(query, context, sub_id, plan_id):
@@ -95,7 +115,14 @@ async def process_renewal_payment(query, context, sub_id, plan_id):
     text = "💳 **روش پرداخت را انتخاب کنید**\n\n"
     text += "برای تمدید اشتراک، روش پرداخت خود را انتخاب کنید:"
     
-    await query.edit_message_text(text, reply_markup=get_payment_methods_keyboard(), parse_mode="Markdown")
+    # Custom keyboard with back to renewal plans
+    keyboard = [
+        [InlineKeyboardButton("💳 کارت به کارت", callback_data="payment_card_to_card")],
+        [InlineKeyboardButton("₿ ارز دیجیتال", callback_data="payment_crypto")],
+        [InlineKeyboardButton("⬅️ بازگشت", callback_data=f"renew_sub_{sub_id}")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 
 async def create_renewal_order(query, context, payment_method):
@@ -109,13 +136,9 @@ async def create_renewal_order(query, context, payment_method):
         duration_days = int(context.user_data.get("renewal_duration_days"))
         price = int(context.user_data.get("renewal_price"))
         
-        # Get original plan to show correct name
-        original_plan = await subscription.vpn_plan.fetch() if hasattr(subscription.vpn_plan, 'fetch') else subscription.vpn_plan
-        plan_name = f"{original_plan.name} - تمدید {duration_days} روز" if original_plan else f"نامحدود - {duration_days} روز"
-        
         # Create a temporary plan object for unlimited renewal
         plan = VPNPlan(
-            name=plan_name,
+            name=f"{subscription.base_name} - تمدید {duration_days} روز",
             duration_days=duration_days,
             price=price,
             traffic_limit_gb=None,
@@ -139,9 +162,14 @@ async def create_renewal_order(query, context, payment_method):
     # Create payment
     payment = await payment_service.create_payment_request(order, payment_method, user.telegram_id)
     
-    # CRITICAL: Mark this payment as renewal in bot_data
-    context.bot_data[f"renewal_sub_{payment.id}"] = str(sub_id)
-    context.bot_data[f"is_renewal_{payment.id}"] = True
+    # CRITICAL: Mark this payment as renewal in database
+    payment.is_renewal = True
+    payment.renewal_subscription_id = str(sub_id)
+    await payment.save()
+    
+    print(f"✅ Renewal payment created: {payment.id}")
+    print(f"🔍 is_renewal = True")
+    print(f"🔍 renewal_subscription_id = {str(sub_id)}")
     
     instructions = payment_service.get_payment_instructions(payment)
     await query.edit_message_text(
@@ -162,9 +190,8 @@ async def confirm_renewal_payment(query, context, payment_id):
     order = await Order.get(payment.order_id)
     plan = await order.vpn_plan.fetch()
     
-    # Get subscription to renew
-    sub_id = context.bot_data.get(f"renewal_sub_{payment_id}")
-    subscription = await Subscription.get(sub_id)
+    # Get subscription to renew from payment record
+    subscription = await Subscription.get(payment.renewal_subscription_id)
     
     # Extend subscription
     result = await renewal_service.extend_subscription(subscription, plan, order)

@@ -297,7 +297,7 @@ async def balance_servers(token: str = Depends(verify_token)):
     """Manually trigger auto-balance across all panels"""
     from app.services.migration_service import migration_service
     
-    result = await migration_service.balance_servers()
+    result = await migration_service.auto_balance_panels()
     
     return {
         "message": "Auto-balance completed",
@@ -347,6 +347,94 @@ async def evacuate_panel(source_panel_key: str, target_panel_key: str = None, re
     }
 
 
+
+@router.get("/user/panel/by-telegram-id/{telegram_id}")
+async def get_user_panel_by_telegram_id(telegram_id: int, token: str = Depends(verify_token)):
+    """Get which panel a user is currently on by Telegram ID"""
+    from app.models.subscription import Subscription
+    
+    subscription = await Subscription.find_one(
+        Subscription.user_telegram_id == telegram_id,
+        Subscription.is_active == True
+    )
+    
+    if not subscription or not subscription.configs:
+        raise HTTPException(status_code=404, detail="No active subscription found for user")
+    
+    panel_name = subscription.configs[0].panel_name
+    
+    return {
+        "telegram_id": telegram_id,
+        "panel": panel_name,
+        "total_configs": len(subscription.configs),
+        "subscription_token": subscription.subscription_token,
+        "base_name": subscription.base_name
+    }
+
+@router.get("/user/panel/by-order/{order_id}")
+async def get_user_panel_by_order(order_id: str, token: str = Depends(verify_token)):
+    """Get which panel a user is on by Order ID"""
+    from bson import ObjectId
+    
+    try:
+        order = await Order.get(ObjectId(order_id)) if ObjectId.is_valid(order_id) else None
+    except:
+        order = None
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    user = await order.user.fetch() if hasattr(order.user, 'fetch') else order.user
+    
+    # Get the EXACT subscription from this order's panel_configs
+    subscription = None
+    if hasattr(order, 'panel_configs') and order.panel_configs:
+        for sub_link in order.panel_configs:
+            sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
+            if sub and sub.is_active:
+                subscription = sub
+                break
+    
+    if not subscription or not subscription.configs:
+        raise HTTPException(status_code=404, detail="No subscription found for this order")
+    
+    panel_name = subscription.configs[0].panel_name
+    
+    return {
+        "order_id": order_id,
+        "telegram_id": user.telegram_id,
+        "user_name": user.first_name,
+        "panel": panel_name,
+        "total_configs": len(subscription.configs),
+        "subscription_token": subscription.subscription_token,
+        "base_name": subscription.base_name
+    }
+
+@router.get("/user/panel/by-subscription/{subscription_token}")
+async def get_user_panel_by_subscription(subscription_token: str, token: str = Depends(verify_token)):
+    """Get which panel a user is on by Subscription Token"""
+    from app.models.subscription import Subscription
+    
+    subscription = await Subscription.find_one(
+        Subscription.subscription_token == subscription_token,
+        Subscription.is_active == True
+    )
+    
+    if not subscription or not subscription.configs:
+        raise HTTPException(status_code=404, detail="Subscription not found or inactive")
+    
+    panel_name = subscription.configs[0].panel_name
+    
+    return {
+        "subscription_token": subscription_token,
+        "telegram_id": subscription.user_telegram_id,
+        "panel": panel_name,
+        "total_configs": len(subscription.configs),
+        "base_name": subscription.base_name,
+        "expires_at": subscription.expires_at,
+        "traffic_used_gb": round(subscription.traffic_used / (1024**3), 2),
+        "total_limit_gb": round(subscription.total_limit / (1024**3), 2)
+    }
 
 @router.get("/health")
 def health_check():

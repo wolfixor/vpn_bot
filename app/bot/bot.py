@@ -78,7 +78,7 @@ class TelegramBot:
         """Handle reply keyboard button presses"""
         text = update.message.text
         
-        if "خرید VPN" in text:
+        if "خرید" in text and "VPN" in text:
             from app.bot.handlers.start import show_protocol_selection_message
             await show_protocol_selection_message(update)
         elif "اشتراک من" in text:
@@ -133,12 +133,15 @@ class TelegramBot:
         photo = update.message.photo[-1]  # Get highest resolution
         caption = update.message.caption or ""
         
-        # Check if user has a pending payment AND is waiting for photo
-        payment = await Payment.find_one({
-            "user_telegram_id": user_id,
-            "status": "pending",
-            "payment_proof_file_id": None  # Only accept if no proof submitted yet
-        })
+        # Check if user has a pending payment AND is waiting for photo (get most recent)
+        payment = await Payment.find(
+            Payment.user_telegram_id == user_id,
+            Payment.status == "pending",
+            Payment.proof_photo_file_id == None
+        ).sort(-Payment.created_at).first_or_none()
+        
+        if payment:
+            print(f"📸 Photo received for payment {payment.id} (is_renewal={payment.is_renewal})")
         
         if not payment:
             await update.message.reply_text(

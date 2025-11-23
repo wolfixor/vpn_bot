@@ -467,7 +467,7 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         from app.services.migration_service import migration_service
-        result = await migration_service.balance_servers()
+        result = await migration_service.auto_balance_panels()
         
         if result.get("success"):
             text = f"✅ **تعادل کامل شد!**\n\n"

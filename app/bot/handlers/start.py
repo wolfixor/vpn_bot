@@ -90,14 +90,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("payment_"):
         payment_method = data.replace("payment_", "", 1)
         # Check if this is a renewal payment
-        if context.user_data.get("renewal_plan_id"):
+        if context.user_data.get("renewal_plan_id") or context.user_data.get("is_unlimited_renewal"):
             from app.bot.handlers.renewal import create_renewal_order
             await create_renewal_order(query, context, payment_method)
         else:
             await create_payment_request(query, context, payment_method)
     elif data.startswith("confirm_payment_"):
         payment_id = data.split("_")[2]
-        if context.bot_data.get(f"is_renewal_{payment_id}"):
+        # Check if this is a renewal payment from database
+        payment = await Payment.get(payment_id)
+        print(f"🔍 Checking payment {payment_id}: is_renewal={payment.is_renewal}")
+        if payment.is_renewal:
             from app.bot.handlers.renewal import confirm_renewal_payment
             await confirm_renewal_payment(query, context, payment_id)
         else:
@@ -199,7 +202,7 @@ async def show_welcome_menu(update, user_name):
     
     # Create persistent reply keyboard
     keyboard = [
-        ["🛒 خرید VPN", "📊 اشتراک من"],
+        ["🛒 خرید یا تمدید VPN", "📊 اشتراک من"],
         ["📦 کانفیگ های من", "📋 فاکتور های من"],
         ["ℹ️ راهنما", "🔄 شروع مجدد"]
     ]
@@ -229,7 +232,7 @@ async def verify_channel_membership(query, context):
             
             # Create persistent reply keyboard
             keyboard = [
-                ["🛒 خرید VPN", "📊 اشتراک من"],
+                ["🛒 خرید یا تمدید VPN", "📊 اشتراک من"],
                 ["📦 کانفیگ های من", "📋 فاکتور های من"],
                 ["ℹ️ راهنما", "🔄 شروع مجدد"]
             ]
@@ -260,7 +263,7 @@ async def verify_channel_membership(query, context):
             text += "یک گزینه انتخاب کنید:"
             
             keyboard = [
-                ["🛒 خرید VPN", "📊 اشتراک من"],
+                ["🛒 خرید یا تمدید VPN", "📊 اشتراک من"],
                 ["📦 کانفیگ های من", "📋 فاکتور های من"],
                 ["ℹ️ راهنما", "🔄 شروع مجدد"]
             ]
@@ -495,9 +498,10 @@ async def show_subscription_details(query, base_name):
     expires_at = subscription.expires_at
     config_count = len(subscription.configs)
     
-    # Get plan from subscription's order
+    # Get plan and order ID from subscription's order
     plan_name = "نامشخص"
     plan_is_unlimited = False
+    order_id = None
     orders = await Order.find(Order.user.id == user.id).to_list()
     for order in orders:
         try:
@@ -509,6 +513,7 @@ async def show_subscription_details(query, base_name):
                         if plan:
                             plan_name = plan.name
                             plan_is_unlimited = plan.traffic_limit_gb is None
+                        order_id = str(order.id)
                         break
         except Exception as e:
             print(f"❌ Error fetching plan: {e}")
@@ -524,6 +529,8 @@ async def show_subscription_details(query, base_name):
     escaped_name = base_name.replace("_", "\\_")
     
     text = f"📊 **اشتراک: {escaped_name}**\n\n"
+    if order_id:
+        text += f"🆔 **Order ID:** `{order_id}`\n"
     text += f"📦 **پلن:** {plan_name}\n"
     text += f"• مصرف شده: {round(used_gb, 2)}GB\n"
     
@@ -673,7 +680,7 @@ async def restart_bot_message(update, context):
     text += "یک گزینه انتخاب کنید:"
     
     keyboard = [
-        ["🛒 خرید VPN", "📊 اشتراک من"],
+        ["🛒 خرید یا تمدید VPN", "📊 اشتراک من"],
         ["📦 کانفیگ های من", "📋 فاکتور های من"],
         ["ℹ️ راهنما", "🔄 شروع مجدد"]
     ]
@@ -753,12 +760,21 @@ async def show_duration_selection(query, protocol):
 
 async def show_vpn_plans(query, protocol, duration_months):
     """Show available VPN plans for selected duration"""
+    print(f"🔍 show_vpn_plans called: protocol={protocol}, duration_months={duration_months}")
+    
     # Filter plans by duration
     duration_days = duration_months * 30
-    plans = await VPNPlan.find(
+    all_plans = await VPNPlan.find(
         VPNPlan.is_active == True,
         VPNPlan.duration_days == duration_days
     ).to_list()
+    
+    # Filter out temporary renewal plans (contain 'تمدید' in name)
+    plans = [plan for plan in all_plans if 'تمدید' not in plan.name]
+    
+    print(f"🔍 Found {len(plans)} plans for {duration_days} days (filtered from {len(all_plans)} total)")
+    for plan in plans:
+        print(f"  - {plan.name}: {plan.traffic_limit_gb}GB, {plan.price} Rials")
     
     if not plans:
         await query.edit_message_text(
@@ -873,7 +889,7 @@ async def show_payment_methods(update):
     
     await update.message.reply_text(text, reply_markup=get_payment_methods_keyboard(), parse_mode="Markdown")
 
-async def show_payment_methods_callback(query):
+async def show_payment_methods_callback(query, context=None):
     """Show payment method selection for callback query"""
     text = "💳 **روش پرداخت را انتخاب کنید**\n\n"
     text += "💳 **کارت به کارت**\n"
@@ -886,7 +902,15 @@ async def show_payment_methods_callback(query):
     text += "• تأیید خودکار\n\n"
     text += "روش پرداخت مورد نظر خود را انتخاب کنید:"
     
-    await query.edit_message_text(text, reply_markup=get_payment_methods_keyboard(), parse_mode="Markdown")
+    # Use custom keyboard with proper back button
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [
+        [InlineKeyboardButton("💳 کارت به کارت", callback_data="payment_card_to_card")],
+        [InlineKeyboardButton("₿ ارز دیجیتال", callback_data="payment_crypto")],
+        [InlineKeyboardButton("⬅️ بازگشت", callback_data="back_to_plans")]
+    ]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 async def create_payment_request(query, context, payment_method):
     """Create payment request"""
@@ -935,6 +959,16 @@ async def create_payment_request(query, context, payment_method):
         status=OrderStatus.PAYMENT_PENDING
     )
     await order.save()
+    
+    # Cancel any old pending payments for this user
+    old_payments = await Payment.find(
+        Payment.user_telegram_id == user.telegram_id,
+        Payment.status == "pending"
+    ).to_list()
+    for old_payment in old_payments:
+        old_payment.status = "expired"
+        await old_payment.save()
+        print(f"❌ Cancelled old pending payment: {old_payment.id}")
     
     # Create payment request - pass user telegram_id directly
     payment = await payment_service.create_payment_request(order, payment_method, user.telegram_id)
