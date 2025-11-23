@@ -15,7 +15,6 @@ def is_admin(user_id: int) -> bool:
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show admin panel with buttons"""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ شما دسترسی ندارید.")
         return
     
     text = "🔑 **پنل مدیریت**\n\n"
@@ -40,22 +39,53 @@ async def handle_admin_callback(query, context):
     data = query.data
     
     if data == "admin_stats":
-        from app.models.order import Order
+        from app.models.order import Order, OrderStatus
         from app.models.subscription import Subscription
         from app.models.payment import Payment
+        from datetime import datetime, timedelta
+        
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = now - timedelta(days=7)
+        month_start = now - timedelta(days=30)
         
         total_users = await User.find_all().count()
         total_orders = await Order.find_all().count()
         total_subs = await Subscription.find({"is_active": True}).count()
         pending_payments = await Payment.find({"status": "pending"}).count()
         
+        today_orders = await Order.find(
+            Order.created_at >= today_start,
+            Order.status == OrderStatus.PAID
+        ).to_list()
+        
+        week_orders = await Order.find(
+            Order.created_at >= week_start,
+            Order.status == OrderStatus.PAID
+        ).to_list()
+        
+        month_orders = await Order.find(
+            Order.created_at >= month_start,
+            Order.status == OrderStatus.PAID
+        ).to_list()
+        
+        today_revenue = sum(o.price for o in today_orders)
+        week_revenue = sum(o.price for o in week_orders)
+        month_revenue = sum(o.price for o in month_orders)
+        
         text = "📊 **آمار ربات**\n\n"
         text += f"👥 کاربران: {total_users}\n"
         text += f"📦 سفارشات: {total_orders}\n"
         text += f"✅ اشتراکهای فعال: {total_subs}\n"
-        text += f"⏳ پرداختهای معلق: {pending_payments}\n"
+        text += f"⏳ پرداختهای معلق: {pending_payments}\n\n"
         
-        await query.edit_message_text(text, parse_mode="Markdown")
+        text += "💰 **فروش:**\n"
+        text += f"📅 امروز: {len(today_orders)} فروش | {int(today_revenue / 1000):,} تومان\n"
+        text += f"📆 7 روز: {len(week_orders)} فروش | {int(week_revenue / 1000):,} تومان\n"
+        text += f"📆 30 روز: {len(month_orders)} فروش | {int(month_revenue / 1000):,} تومان\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     
     elif data == "admin_broadcast_start":
         # Set waiting state
@@ -235,7 +265,6 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Broadcast message to all users - Admin only"""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ شما دسترسی ندارید.")
         return
     
     # Check if message provided
@@ -332,24 +361,56 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show bot statistics - Admin only"""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ شما دسترسی ندارید.")
         return
     
-    from app.models.order import Order
+    from app.models.order import Order, OrderStatus
     from app.models.subscription import Subscription
     from app.models.payment import Payment
+    from datetime import datetime, timedelta
     
-    # Get stats
+    # Time ranges
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+    month_start = now - timedelta(days=30)
+    
+    # Total stats
     total_users = await User.find_all().count()
     total_orders = await Order.find_all().count()
     total_subs = await Subscription.find({"is_active": True}).count()
     pending_payments = await Payment.find({"status": "pending"}).count()
     
+    # Sales stats
+    today_orders = await Order.find(
+        Order.created_at >= today_start,
+        Order.status == OrderStatus.PAID
+    ).to_list()
+    
+    week_orders = await Order.find(
+        Order.created_at >= week_start,
+        Order.status == OrderStatus.PAID
+    ).to_list()
+    
+    month_orders = await Order.find(
+        Order.created_at >= month_start,
+        Order.status == OrderStatus.PAID
+    ).to_list()
+    
+    # Calculate revenue
+    today_revenue = sum(o.price for o in today_orders)
+    week_revenue = sum(o.price for o in week_orders)
+    month_revenue = sum(o.price for o in month_orders)
+    
     text = "📊 **آمار ربات**\n\n"
     text += f"👥 کاربران: {total_users}\n"
     text += f"📦 سفارشات: {total_orders}\n"
     text += f"✅ اشتراکهای فعال: {total_subs}\n"
-    text += f"⏳ پرداختهای معلق: {pending_payments}\n"
+    text += f"⏳ پرداختهای معلق: {pending_payments}\n\n"
+    
+    text += "💰 **فروش:**\n"
+    text += f"📅 امروز: {len(today_orders)} فروش | {int(today_revenue / 1000):,} تومان\n"
+    text += f"📆 7 روز: {len(week_orders)} فروش | {int(week_revenue / 1000):,} تومان\n"
+    text += f"📆 30 روز: {len(month_orders)} فروش | {int(month_revenue / 1000):,} تومان\n"
     
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -357,7 +418,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def migrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Migrate users between panels - Admin only"""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ شما دسترسی ندارید.")
         return
     
     if len(context.args) < 3:
@@ -399,7 +459,6 @@ async def migrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تعادل خودکار سرورها - Admin only"""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ شما دسترسی ندارید.")
         return
     
     progress_msg = await update.message.reply_text(
@@ -429,7 +488,6 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def inbound_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show inbound load statistics - Admin only"""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ شما دسترسی ندارید.")
         return
     
     from app.services.inbound_balancer import inbound_balancer

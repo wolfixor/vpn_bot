@@ -398,14 +398,14 @@ async def show_my_subscription_message(update):
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 async def show_my_orders_message(update):
-    """Show last 5 orders for message handler"""
+    """Show last 10 orders for message handler"""
     user = await User.find_one(User.telegram_id == update.effective_user.id)
     if not user:
         text = "❌ **کاربر یافت نشد**\n\nلطفاً ابتدا یک پلن VPN خریداری کنید."
         await update.message.reply_text(text, parse_mode="Markdown")
         return
     
-    orders = await Order.find(Order.user.id == user.id).sort(-Order.created_at).limit(5).to_list()
+    orders = await Order.find(Order.user.id == user.id).sort(-Order.created_at).limit(10).to_list()
     
     if not orders:
         text = "📋 **بدون فاکتور**\n\nشما هنوز هیچ فاکتوری ندارید.\n\nاز 🛒 خرید VPN برای شروع استفاده کنید!"
@@ -419,7 +419,7 @@ async def show_my_orders_message(update):
             "expired": "منقضی شده"
         }
         
-        text = "📋 **فاکتور های من (5 آخرین):**\n\n"
+        text = "📋 **فاکتور های من (10 آخرین):**\n\n"
         
         for i, order in enumerate(orders):
             plan = await order.vpn_plan.fetch()
@@ -993,6 +993,9 @@ async def confirm_payment_admin(query, context, payment_id):
     # Create VPN subscription
     result = await vpn_service.create_subscription(order, config_name)
     
+    # Clear the stored config name after successful creation
+    context.bot_data.pop(f"config_name_{payment.user_telegram_id}", None)
+    
     # Send subscription link to user (always)
     user = await User.find_one(User.telegram_id == payment.user_telegram_id)
     
@@ -1014,15 +1017,26 @@ async def confirm_payment_admin(query, context, payment_id):
 async def reject_payment_admin(query, context, payment_id):
     """Admin rejects payment"""
     payment = await Payment.get(payment_id)
+    
+    # Get order and cancel it
+    from app.models.order import Order, OrderStatus
+    order = await Order.get(payment.order_id)
+    order.status = OrderStatus.CANCELLED
+    await order.save()
+    
     await payment_service.reject_payment(payment, query.from_user.id)
+    
+    # Clear the stored config name
+    context.bot_data.pop(f"config_name_{payment.user_telegram_id}", None)
     
     # Notify user
     user = await User.find_one(User.telegram_id == payment.user_telegram_id)
     await context.bot.send_message(
         chat_id=payment.user_telegram_id,
         text=f"❌ **پرداخت رد شد**\n\n"
-            "رسید ارسالی شما تأیید نشد.\n"
-            f"لطفاً با پشتیبانی تماس بگیرید:{settings.SUPPORT_USERNAME}\n",
+            "رسید ارسالی شما تأیید نشد.\n\n"
+            "لطفاً دوباره از 🛍️ خرید VPN استفاده کنید.\n\n"
+            f"برای راهنمایی با {settings.SUPPORT_USERNAME} تماس بگیرید.",
         parse_mode="Markdown"
     )
 
@@ -1151,19 +1165,19 @@ async def show_my_subscription(query):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 async def show_my_orders(query):
-    """Show last 5 orders"""
+    """Show last 10 orders"""
     user = await User.find_one(User.telegram_id == query.from_user.id)
     if not user:
         text = "❌ **کاربر یافت نشد**\n\nلطفاً ابتدا یک پلن VPN خریداری کنید."
         await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
         return
     
-    orders = await Order.find(Order.user.id == user.id).sort(-Order.created_at).limit(5).to_list()
+    orders = await Order.find(Order.user.id == user.id).sort(-Order.created_at).limit(10).to_list()
     
     if not orders:
         text = "📋 **بدون فاکتور**\n\nشما هنوز هیچ فاکتوری ندارید.\n\nاز 🛒 خرید VPN برای شروع استفاده کنید!"
     else:
-        text = "📋 **فاکتور های من (5 آخرین):**\n\n"
+        text = "📋 **فاکتور های من (10 آخرین):**\n\n"
         
         status_map = {
             "pending": "در انتظار",

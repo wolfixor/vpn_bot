@@ -165,15 +165,38 @@ class TelegramBot:
         from app.models.user import User
         user = await User.find_one(User.telegram_id == user_id)
         
+        # Get order to show original price
+        from app.models.order import Order
+        order = await Order.get(payment.order_id)
+        
+        print(f"🔍 Order coupon info: original_price={order.original_price}, coupon_code={order.coupon_code}, discount={order.discount_amount}")
+        
         username_display = f"@{user.username}" if user.username else "N/A"
         phone_display = user.phone if user.phone else "N/A"
-        amount_display = int(payment.amount / 1000)
+        
+        # Show original price if coupon was used, otherwise show payment amount
+        if order.original_price and order.coupon_code:
+            amount_display = int(order.original_price / 1000)
+            discount_display = int(order.discount_amount / 1000)
+            final_display = int(payment.amount / 1000)
+        else:
+            amount_display = int(payment.amount / 1000)
+            discount_display = None
+            final_display = None
+        
         admin_text = f"💳 **درخواست تأیید پرداخت**\n\n"
         admin_text += f"👤 **کاربر:** {user.first_name}\n"
         admin_text += f"💬 **یوزرنیم:** {username_display}\n"
         admin_text += f"📱 **تلفن:** {phone_display}\n"
         admin_text += f"🆔 **ID:** `{user.telegram_id}`\n"
-        admin_text += f"💰 **مبلغ:** {amount_display}تومان\n"
+        
+        if discount_display:
+            admin_text += f"💰 **قیمت اصلی:** {amount_display:,} تومان\n"
+            admin_text += f"🎁 **تخفیف:** {discount_display:,} تومان ({order.coupon_code})\n"
+            admin_text += f"💵 **مبلغ نهایی:** {final_display:,} تومان\n"
+        else:
+            admin_text += f"💰 **مبلغ:** {amount_display:,} تومان\n"
+        
         admin_text += f"💳 **روش:** {payment.payment_method}\n"
         if caption:
             admin_text += f"📝 **پیام:** {caption}\n"

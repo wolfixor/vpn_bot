@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     ENABLE_PAYMENT_VERIFICATION: bool = False
     ENABLE_CHANNEL_VERIFICATION: bool = False
     
+    # API Documentation Security
+    DOCS_PATH: str = "/asdfasdfasfdf/docs"
+    REDOC_PATH: str = "/asdfasdfasfdf/redoc"
+    
     # Panel Credentials
     GERMANY_PANEL_USERNAME: str = "admin"
     GERMANY_PANEL_PASSWORD: str = "password"

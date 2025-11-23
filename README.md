@@ -20,12 +20,15 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## Features
 
-- Users get configs from ALL enabled panels
-- Unlimited traffic plans with estimation
-- Dynamic panel management via YAML
-- Automatic tunnel/direct detection
-- Never stops creating users
-- Background monitoring and cleanup
-- **Coupon system** with detailed tracking (see [COUPON_SYSTEM.md](COUPON_SYSTEM.md))
-- Order ID support for customer service
-- Auto-balance and migration system
+- **Smart Load Balancing**: Users get configs from ONE selected panel (optimal performance)
+- **Migration System**: Move users between panels seamlessly
+- **Auto-Balance**: Automatically distribute users across panels
+- **Dynamic Panel Management**: Add/remove panels via YAML configuration
+- **Unlimited Traffic Plans**: With intelligent estimation and monitoring
+- **Automatic Tunnel/Direct Detection**: Smart config generation
+- **Never Stops Creating Users**: Business continuity with capacity alerts
+- **Background Monitoring**: Automated cleanup and health checks
+- **Coupon System**: Complete discount code system with analytics (see [COUPON_SYSTEM.md](COUPON_SYSTEM.md))
+- **Disaster Recovery**: Restore all users to new infrastructure
+- **Order ID Support**: Customer service tools
+- **Hidden API Documentation**: Secure `/asdfasdfasfdf/docs` path

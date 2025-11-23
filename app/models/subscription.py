@@ -33,5 +33,8 @@ class Subscription(Document):
     expiry_warned: bool = False  # Warning sent for expiry
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
+    # Migration tracking (for sync optimization)
+    migration_history: Optional[dict] = None
+    
     class Settings:
         name = "subscriptions"

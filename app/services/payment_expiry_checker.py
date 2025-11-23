@@ -83,19 +83,30 @@ async def check_expired_subscriptions(bot):
                         await disable_subscription(bot, sub, "traffic_exceeded")
                         continue
                     
-                    # Warn if close to limit (90%)
-                    remaining_gb = (sub.total_limit - total_used) / (1024**3)
-                    if remaining_gb < 1 and not sub.traffic_warned:
-                        user = await User.find_one({"subscriptions": sub.id})
-                        if user:
-                            text = f"⚠️ **هشدار ترافیک**\n\n"
-                            text += f"اشتراک {sub.base_name}:\n"
-                            text += f"ترافیک باقیمانده: {remaining_gb:.2f}GB\n\n"
-                            text += "برای تمدید از گزینه 🛒 خرید VPN استفاده کنید."
-                            
-                            await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode="Markdown")
-                            sub.traffic_warned = True
-                            await sub.save()
+                    # Warn if close to limit (only for limited plans)
+                    # Check if plan is unlimited by checking original order
+                    from app.models.order import Order
+                    order = await Order.find_one({"panel_configs": sub.id})
+                    is_unlimited = False
+                    if order:
+                        plan = await order.vpn_plan.fetch() if hasattr(order.vpn_plan, 'fetch') else order.vpn_plan
+                        if plan and plan.traffic_limit_gb is None:
+                            is_unlimited = True
+                    
+                    # Only warn about traffic for limited plans
+                    if not is_unlimited:
+                        remaining_gb = (sub.total_limit - total_used) / (1024**3)
+                        if remaining_gb < 1 and not sub.traffic_warned:
+                            user = await User.find_one({"subscriptions": sub.id})
+                            if user:
+                                text = f"⚠️ **هشدار ترافیک**\n\n"
+                                text += f"اشتراک {sub.base_name}:\n"
+                                text += f"ترافیک باقیمانده: {remaining_gb:.2f}GB\n\n"
+                                text += "برای تمدید از گزینه 🛒 خرید VPN استفاده کنید."
+                                
+                                await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode="Markdown")
+                                sub.traffic_warned = True
+                                await sub.save()
                 
                 # Warn 3 days before expiry
                 if sub.expires_at:

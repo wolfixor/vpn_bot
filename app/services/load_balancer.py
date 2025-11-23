@@ -160,36 +160,32 @@ class LoadBalancerService:
             print(f"❌ Error sending approaching capacity alert: {e}")
     
     async def sync_server_loads(self):
-        """Sync server loads from active subscriptions - only enabled servers"""
+        """Sync server loads from active subscriptions - optimized for migrations"""
         from app.models.subscription import Subscription
         
         # Remove disabled servers first
         enabled_panels = panel_config.get_enabled_panels()
         enabled_names = [info['name'] for info in enabled_panels.values()]
         
-        # Delete servers not in enabled list
+        # Delete servers not in enabled list and clean up migrated subscriptions
         all_servers = await ServerLoad.find().to_list()
+        disabled_panels = []
+        
         for server in all_servers:
             if server.panel_name not in enabled_names:
                 print(f"🗑️ Removing disabled server: {server.panel_name}")
+                disabled_panels.append(server.panel_name)
                 await server.delete()
         
-        # Sync enabled servers
+        # Clean up migration tracking for disabled panels
+        if disabled_panels:
+            await self._cleanup_migration_tracking(disabled_panels)
+        
+        # Sync enabled servers with migration optimization
         for panel_name, panel_info in enabled_panels.items():
             try:
-                # Count active subscriptions that have configs on this panel
-                subscriptions = await Subscription.find(Subscription.is_active == True).to_list()
-                
-                # Count unique subscriptions (not inbounds) that use this panel
-                subscription_count = 0
-                for sub in subscriptions:
-                    # Check if this subscription has any config on this panel
-                    has_config_on_panel = any(
-                        config.panel_name.lower().replace(' ', '') == panel_info['name'].lower().replace(' ', '')
-                        for config in sub.configs
-                    )
-                    if has_config_on_panel:
-                        subscription_count += 1
+                # Count subscriptions with migration optimization
+                subscription_count = await self._count_panel_subscriptions(panel_info['name'])
                 
                 server = await ServerLoad.find_one(ServerLoad.panel_name == panel_info['name'])
                 
@@ -211,6 +207,56 @@ class LoadBalancerService:
                     
             except Exception as e:
                 print(f"❌ Error syncing {panel_name}: {e}")
+    
+    async def _count_panel_subscriptions(self, panel_name: str) -> int:
+        """Count subscriptions on panel with migration optimization"""
+        from app.models.subscription import Subscription
+        
+        # Get all active subscriptions
+        subscriptions = await Subscription.find(Subscription.is_active == True).to_list()
+        
+        subscription_count = 0
+        for sub in subscriptions:
+            # Skip if subscription was migrated and original panel still exists
+            if sub.migration_history:
+                original_panel = sub.migration_history.get('from')
+                if original_panel and original_panel != panel_name:
+                    # Check if original panel still exists
+                    enabled_panels = panel_config.get_enabled_panels()
+                    original_still_exists = any(
+                        info['name'] == original_panel 
+                        for info in enabled_panels.values()
+                    )
+                    if original_still_exists:
+                        # Skip this subscription in sync - it's tracked on new panel only
+                        continue
+            
+            # Check if this subscription has any config on this panel
+            has_config_on_panel = any(
+                config.panel_name.lower().replace(' ', '') == panel_name.lower().replace(' ', '')
+                for config in sub.configs
+            )
+            if has_config_on_panel:
+                subscription_count += 1
+        
+        return subscription_count
+    
+    async def _cleanup_migration_tracking(self, disabled_panels: list):
+        """Clean up migration tracking when panels are disabled"""
+        from app.models.subscription import Subscription
+        
+        # Find subscriptions that were migrated from now-disabled panels
+        subscriptions = await Subscription.find({
+            "is_active": True,
+            "migration_history": {"$ne": None}
+        }).to_list()
+        
+        for sub in subscriptions:
+            # Clear migration history if original panel is now disabled
+            if sub.migration_history and sub.migration_history.get('from') in disabled_panels:
+                sub.migration_history = None
+                await sub.save()
+                print(f"🧹 Cleared migration tracking for subscription {sub.subscription_token[:8]}... (original panel disabled)")
 
 async def start_load_balancer_sync():
     """Start background task to sync server loads every 10 minutes"""
@@ -240,9 +286,9 @@ async def start_load_balancer_sync():
                     if needs_balance:
                         print(f"⚠️ Imbalance detected - triggering auto-balance...")
                         from app.services.migration_service import migration_service
-                        result = await migration_service.balance_servers()
+                        result = await migration_service.auto_balance_panels()
                         if result.get("success"):
-                            print(f"✅ Auto-balance completed: {result.get('total_migrations', 0)} migrations")
+                            print(f"✅ Auto-balance completed: {result.get('migrations', 0)} migrations")
                         else:
                             print(f"ℹ️ {result.get('error', 'No balance needed')}")
                     else:

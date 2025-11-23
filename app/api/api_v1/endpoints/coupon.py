@@ -113,3 +113,90 @@ async def delete_coupon(code: str):
     
     await coupon.delete()
     return {"success": True, "message": "Coupon deleted"}
+
+@router.post("/restore-all-users")
+async def restore_all_users(preserve_traffic: bool = False):
+    """Disaster recovery: Restore all active users to current panels
+    
+    Args:
+        preserve_traffic: If True, keeps current traffic usage and adjusts limits.
+                         If False, resets traffic to 0 (fresh start).
+    """
+    from app.models.subscription import Subscription, ConfigItem
+    from app.models.user import User
+    from app.services.xui_service import XUIService
+    from app.core.panel_config import panel_config
+    from app.services.inbound_balancer import inbound_balancer
+    import uuid
+    
+    subscriptions = await Subscription.find({"is_active": True}).to_list()
+    enabled_panels = panel_config.get_enabled_panels()
+    
+    success_count = 0
+    failed_count = 0
+    
+    for sub in subscriptions:
+        try:
+            user = await User.find_one({"subscriptions": sub.id})
+            if not user:
+                failed_count += 1
+                continue
+            
+            # Calculate remaining traffic if preserving
+            remaining_traffic = sub.total_limit
+            if preserve_traffic and sub.traffic_used > 0:
+                remaining_traffic = max(0, sub.total_limit - sub.traffic_used)
+            
+            sub.configs = []
+            new_configs = []
+            
+            for panel_key, panel_info in enabled_panels.items():
+                try:
+                    panel_service = XUIService(panel_key)
+                    inbound_assignments = await inbound_balancer.get_balanced_inbounds(panel_key)
+                    
+                    for inbound_id in inbound_assignments:
+                        client_uuid = str(uuid.uuid4())
+                        client_email = f"{sub.base_name}_{panel_key}_inbound{inbound_id}"
+                        
+                        result = await panel_service.add_client(
+                            inbound_id=inbound_id,
+                            email=client_email,
+                            uuid=client_uuid,
+                            total_gb=remaining_traffic,
+                            expire_time=int(sub.expires_at.timestamp() * 1000) if sub.expires_at else 0
+                        )
+                        
+                        if result:
+                            new_configs.append(ConfigItem(
+                                panel_name=panel_info['name'],
+                                inbound_id=inbound_id,
+                                client_uuid=client_uuid,
+                                client_email=client_email
+                            ))
+                except:
+                    pass
+            
+            if new_configs:
+                sub.configs = new_configs
+                if preserve_traffic:
+                    # Keep current usage, update limit to remaining
+                    sub.total_limit = remaining_traffic
+                else:
+                    # Reset traffic
+                    sub.traffic_used = 0
+                await sub.save()
+                success_count += 1
+            else:
+                failed_count += 1
+        except:
+            failed_count += 1
+    
+    return {
+        "success": True,
+        "total_subscriptions": len(subscriptions),
+        "restored": success_count,
+        "failed": failed_count,
+        "panels_used": len(enabled_panels),
+        "traffic_preserved": preserve_traffic
+    }

@@ -1,79 +1,137 @@
 #!/usr/bin/env python3
 """
-Manual migration script for moving users between panels
+User Migration Script
+Command-line tool for migrating users between VPN panels
 """
+
 import asyncio
+import argparse
 import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
 
-from app.database.database import connect_to_mongo, init_db
-from app.services.migration_service import migration_service
-from app.core.panel_config import panel_config
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-async def main():
-    await connect_to_mongo()
-    await init_db()
+from app.services.migration_service import MigrationService
+from app.core.logger import logger
+
+
+async def migrate_single_subscription(token: str, target: str, reset_traffic: bool = True):
+    """Migrate a single subscription"""
+    from app.services.migration_service import migration_service
+    from app.models.subscription import Subscription
     
-    print("🔄 VPN User Migration Tool")
-    print("=" * 40)
+    print(f"Migrating subscription {token[:8]}... to {target}...")
     
-    # Show available panels
-    enabled_panels = panel_config.get_enabled_panels()
-    print("\n📋 Available Panels:")
-    for key, info in enabled_panels.items():
-        print(f"  {key}: {info['name']} ({info['flag']})")
+    subscription = await Subscription.find_one(Subscription.subscription_token == token)
+    if not subscription:
+        print(f"✗ Failed: Subscription not found")
+        return False
     
-    print("\n🎯 Migration Options:")
-    print("1. Migrate specific users from panel A to panel B")
-    print("2. Auto-balance all servers")
-    print("3. Show server status")
+    result = await migration_service.migrate_subscription(subscription, target, reset_traffic)
     
-    choice = input("\nEnter choice (1-3): ").strip()
+    if result["success"]:
+        print(f"✓ Success: {result['message']}")
+        print(f"  New configs: {result['new_configs_count']}")
+        print(f"  Traffic preserved: {result['traffic_preserved']}")
+    else:
+        print(f"✗ Failed: {result['error']}")
     
-    if choice == "1":
-        # Manual migration
-        source = input("Source panel name (e.g., Germany): ").strip()
-        target_key = input("Target panel key (e.g., server2): ").strip()
-        max_users = int(input("Max users to migrate (default 10): ").strip() or "10")
+    return result["success"]
+
+
+async def migrate_bulk_subscriptions(tokens: list, target: str, reset_traffic: bool = True):
+    """Migrate multiple subscriptions"""
+    from app.services.migration_service import migration_service
+    
+    print(f"Migrating {len(tokens)} subscriptions to {target}...")
+    result = await migration_service.bulk_migrate_subscriptions(tokens, target, reset_traffic)
+    
+    print(f"✓ Migrated: {result['migrated']}")
+    print(f"✗ Failed: {result['failed']}")
+    
+    if result["details"]["failed"]:
+        print("\nFailed migrations:")
+        for failure in result["details"]["failed"]:
+            print(f"  Token {failure['token'][:8]}...: {failure['error']}")
+
+
+async def auto_balance():
+    """Auto-balance subscriptions across panels"""
+    from app.services.migration_service import migration_service
+    
+    print("Auto-balancing subscriptions across panels...")
+    result = await migration_service.auto_balance_panels()
+    
+    if result["success"]:
+        print(f"✓ {result['message']}")
+        if "migrations" in result:
+            print(f"  Performed {result['migrations']} migrations")
+    else:
+        print(f"✗ Failed: {result['error']}")
+
+
+async def show_stats():
+    """Show migration statistics"""
+    from app.services.migration_service import migration_service
+    
+    result = await migration_service.get_migration_stats()
+    
+    if result["success"]:
+        print("Panel Distribution:")
+        for panel in result["panel_distribution"]:
+            flag = panel.get('flag', '🌐')
+            print(f"  {flag} {panel['panel_name']} ({panel['panel_key']}): {panel['count']} subscriptions")
         
-        print(f"\n🔄 Migrating up to {max_users} users from {source} to {target_key}...")
-        result = await migration_service.migrate_users_from_panel(source, target_key, max_users)
-        
-        if result.get("success"):
-            print(f"✅ Migration completed!")
-            print(f"   Attempted: {result['total_attempted']}")
-            print(f"   Successful: {result['successful_migrations']}")
-            print(f"   Failed: {result['failed_migrations']}")
-        else:
-            print(f"❌ Migration failed: {result.get('error')}")
+        print(f"\nTotal Subscriptions: {result['total_subscriptions']}")
+        print(f"Enabled Panels: {result['enabled_panels']}")
+    else:
+        print(f"✗ Failed to get stats: {result['error']}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="VPN Bot User Migration Tool")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
-    elif choice == "2":
-        # Auto-balance
-        print("\n⚖️ Auto-balancing servers...")
-        result = await migration_service.balance_servers()
-        
-        if result.get("success"):
-            print(f"✅ Balancing completed!")
-            print(f"   Total migrations: {result['total_migrations']}")
-            for migration in result['migrations']:
-                print(f"   {migration['from']} → {migration['to']}: {migration['attempted']} users")
-        else:
-            print(f"❌ Balancing failed: {result.get('error')}")
+    # Single subscription migration
+    migrate_parser = subparsers.add_parser("migrate", help="Migrate a single subscription")
+    migrate_parser.add_argument("subscription_token", help="Subscription token to migrate")
+    migrate_parser.add_argument("target_panel_key", help="Target panel key")
+    migrate_parser.add_argument("--reset-traffic", action="store_true", help="Reset traffic usage")
     
-    elif choice == "3":
-        # Show status
-        from app.models.server_load import ServerLoad
-        from app.services.load_balancer import load_balancer
-        
-        await load_balancer.sync_server_loads()
-        servers = await ServerLoad.find().to_list()
-        
-        print("\n📊 Server Status:")
-        for server in servers:
-            usage = (server.current_subscriptions / server.max_subscriptions) * 100
-            status = "🟢" if usage < 70 else "🟡" if usage < 90 else "🔴"
-            print(f"  {status} {server.panel_name}: {server.current_subscriptions}/{server.max_subscriptions} ({usage:.1f}%)")
+    # Bulk migration
+    bulk_parser = subparsers.add_parser("bulk", help="Migrate multiple subscriptions")
+    bulk_parser.add_argument("subscription_tokens", nargs="+", help="Subscription tokens to migrate")
+    bulk_parser.add_argument("--target", required=True, help="Target panel key")
+    bulk_parser.add_argument("--reset-traffic", action="store_true", help="Reset traffic usage")
+    
+    # Auto-balance
+    subparsers.add_parser("balance", help="Auto-balance users across panels")
+    
+    # Statistics
+    subparsers.add_parser("stats", help="Show migration statistics")
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        return
+    
+    try:
+        if args.command == "migrate":
+            asyncio.run(migrate_single_subscription(args.subscription_token, args.target_panel_key, args.reset_traffic))
+        elif args.command == "bulk":
+            asyncio.run(migrate_bulk_subscriptions(args.subscription_tokens, args.target, args.reset_traffic))
+        elif args.command == "balance":
+            asyncio.run(auto_balance())
+        elif args.command == "stats":
+            asyncio.run(show_stats())
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user")
+    except Exception as e:
+        print(f"Error: {e}")
+        logger.error(f"Migration script error: {e}")
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
