@@ -109,9 +109,13 @@ async def create_renewal_order(query, context, payment_method):
         duration_days = int(context.user_data.get("renewal_duration_days"))
         price = int(context.user_data.get("renewal_price"))
         
+        # Get original plan to show correct name
+        original_plan = await subscription.vpn_plan.fetch() if hasattr(subscription.vpn_plan, 'fetch') else subscription.vpn_plan
+        plan_name = f"{original_plan.name} - تمدید {duration_days} روز" if original_plan else f"نامحدود - {duration_days} روز"
+        
         # Create a temporary plan object for unlimited renewal
         plan = VPNPlan(
-            name=f"نامحدود - {duration_days} روز",
+            name=plan_name,
             duration_days=duration_days,
             price=price,
             traffic_limit_gb=None,
