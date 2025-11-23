@@ -15,9 +15,9 @@ class CouponUsage(Document):
     user: Link[User]
     vpn_plan: Link[VPNPlan]
     order_id: str
-    discount_amount: float
-    original_price: float
-    final_price: float
+    discount_amount: int  # Store in smallest currency unit (Rial)
+    original_price: int
+    final_price: int
     used_at: datetime = Field(default_factory=datetime.utcnow)
     
     class Settings:
@@ -26,7 +26,7 @@ class CouponUsage(Document):
 class Coupon(Document):
     code: str = Field(unique=True, index=True)
     discount_type: DiscountType
-    discount_value: float  # percentage (0-100) or fixed amount
+    discount_value: float  # percentage (0-100) or fixed amount in Rial
     max_uses: Optional[int] = None  # None = unlimited
     current_uses: int = 0
     valid_from: datetime = Field(default_factory=datetime.utcnow)
@@ -36,9 +36,9 @@ class Coupon(Document):
     # Optional: restrict to specific plans
     allowed_plans: List[str] = []  # Empty = all plans allowed
     
-    # Tracking
-    total_discount_given: float = 0.0
-    total_revenue: float = 0.0
+    # Tracking (stored as integers to avoid floating point precision issues)
+    total_discount_given: int = 0  # Total discount in Rial
+    total_revenue: int = 0  # Total revenue in Rial
     
     class Settings:
         name = "coupons"
@@ -55,7 +55,9 @@ class Coupon(Document):
             return False
         return True
     
-    def calculate_discount(self, price: float) -> float:
+    def calculate_discount(self, price: int) -> int:
+        """Calculate discount amount in Rial (integer)"""
         if self.discount_type == DiscountType.PERCENTAGE:
-            return price * (self.discount_value / 100)
-        return min(self.discount_value, price)
+            discount = round(price * (self.discount_value / 100))
+            return discount
+        return min(int(self.discount_value), price)

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     DOCS_PATH: str = "/asdfasdfasfdf/docs"
     REDOC_PATH: str = "/asdfasdfasfdf/redoc"
     
+    # API Security
+    API_TOKEN: str = "your-secure-api-token-change-in-production"
+    
     # Panel Credentials
     GERMANY_PANEL_USERNAME: str = "admin"
     GERMANY_PANEL_PASSWORD: str = "password"

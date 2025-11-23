@@ -19,10 +19,10 @@ class Order(Document):
     user: Link[User]
     vpn_plan: Link[VPNPlan]
     status: OrderStatus = OrderStatus.PENDING
-    price: float
-    original_price: Optional[float] = None
+    price: int  # Price in smallest currency unit (Rial)
+    original_price: Optional[int] = None
     coupon_code: Optional[str] = None
-    discount_amount: Optional[float] = None
+    discount_amount: Optional[int] = None
     
     # Multi-panel support
     protocol: str = "vless"  # "vless", "vmess", "trojan", "wireguard"

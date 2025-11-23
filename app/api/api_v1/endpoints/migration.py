@@ -3,9 +3,10 @@ Migration API Endpoints
 Admin endpoints for managing user migrations between panels
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from pydantic import BaseModel
+from app.core.security import verify_token
 
 
 router = APIRouter(prefix="/migration", tags=["migration"])
@@ -25,7 +26,8 @@ class BulkMigrateRequest(BaseModel):
 
 @router.post("/subscription")
 async def migrate_subscription(
-    request: MigrateSubscriptionRequest
+    request: MigrateSubscriptionRequest,
+    token: str = Depends(verify_token)
 ):
     """Migrate a single subscription between panels"""
     from app.models.subscription import Subscription
@@ -49,7 +51,8 @@ async def migrate_subscription(
 
 @router.post("/bulk")
 async def bulk_migrate(
-    request: BulkMigrateRequest
+    request: BulkMigrateRequest,
+    token: str = Depends(verify_token)
 ):
     """Migrate multiple subscriptions between panels"""
     from app.services.migration_service import migration_service
@@ -64,7 +67,7 @@ async def bulk_migrate(
 
 
 @router.post("/auto-balance")
-async def auto_balance_panels():
+async def auto_balance_panels(token: str = Depends(verify_token)):
     """Automatically balance subscriptions across all panels"""
     from app.services.migration_service import migration_service
     
@@ -77,7 +80,7 @@ async def auto_balance_panels():
 
 
 @router.get("/stats")
-async def get_migration_stats():
+async def get_migration_stats(token: str = Depends(verify_token)):
     """Get migration and panel distribution statistics"""
     from app.services.migration_service import migration_service
     

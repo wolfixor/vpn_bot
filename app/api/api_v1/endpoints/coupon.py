@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
 from app.models.coupon import Coupon, CouponUsage, DiscountType
 from app.models.vpn_plan import VPNPlan
+from app.core.security import verify_token
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ class CouponStats(BaseModel):
     usage_details: List[dict]
 
 @router.post("/coupons")
-async def create_coupon(data: CouponCreate):
+async def create_coupon(data: CouponCreate, token: str = Depends(verify_token)):
     """Create new coupon"""
     existing = await Coupon.find_one(Coupon.code == data.code)
     if existing:
@@ -47,13 +48,13 @@ async def create_coupon(data: CouponCreate):
     return {"success": True, "coupon": coupon.dict()}
 
 @router.get("/coupons")
-async def list_coupons():
+async def list_coupons(token: str = Depends(verify_token)):
     """List all coupons"""
     coupons = await Coupon.find().to_list()
     return {"coupons": [c.dict() for c in coupons]}
 
 @router.get("/coupons/{code}/stats")
-async def get_coupon_stats(code: str):
+async def get_coupon_stats(code: str, token: str = Depends(verify_token)):
     """Get detailed coupon statistics"""
     coupon = await Coupon.find_one(Coupon.code == code.upper())
     if not coupon:
@@ -90,7 +91,7 @@ async def get_coupon_stats(code: str):
     )
 
 @router.patch("/coupons/{code}")
-async def update_coupon(code: str, is_active: Optional[bool] = None, max_uses: Optional[int] = None):
+async def update_coupon(code: str, is_active: Optional[bool] = None, max_uses: Optional[int] = None, token: str = Depends(verify_token)):
     """Update coupon settings"""
     coupon = await Coupon.find_one(Coupon.code == code.upper())
     if not coupon:
@@ -105,7 +106,7 @@ async def update_coupon(code: str, is_active: Optional[bool] = None, max_uses: O
     return {"success": True, "coupon": coupon.dict()}
 
 @router.delete("/coupons/{code}")
-async def delete_coupon(code: str):
+async def delete_coupon(code: str, token: str = Depends(verify_token)):
     """Delete coupon"""
     coupon = await Coupon.find_one(Coupon.code == code.upper())
     if not coupon:
@@ -115,7 +116,7 @@ async def delete_coupon(code: str):
     return {"success": True, "message": "Coupon deleted"}
 
 @router.post("/restore-all-users")
-async def restore_all_users(preserve_traffic: bool = False):
+async def restore_all_users(preserve_traffic: bool = False, token: str = Depends(verify_token)):
     """Disaster recovery: Restore all active users to current panels
     
     Args:

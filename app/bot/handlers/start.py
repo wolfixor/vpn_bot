@@ -972,8 +972,9 @@ async def confirm_payment_admin(query, context, payment_id):
         coupon = await Coupon.find_one(Coupon.code == order.coupon_code)
         if coupon:
             coupon.current_uses += 1
-            coupon.total_discount_given += order.discount_amount
-            coupon.total_revenue += order.price
+            # Convert to int to avoid floating point precision issues
+            coupon.total_discount_given += int(order.discount_amount or 0)
+            coupon.total_revenue += int(order.price)
             await coupon.save()
             
             usage = CouponUsage(
@@ -981,9 +982,9 @@ async def confirm_payment_admin(query, context, payment_id):
                 user=order.user,
                 vpn_plan=order.vpn_plan,
                 order_id=str(order.id),
-                discount_amount=order.discount_amount,
-                original_price=order.original_price,
-                final_price=order.price
+                discount_amount=int(order.discount_amount or 0),
+                original_price=int(order.original_price or order.price),
+                final_price=int(order.price)
             )
             await usage.insert()
     

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any
 import json
 import httpx
@@ -6,20 +6,21 @@ from app.models.vpn_plan import VPNPlan
 from app.models.order import Order
 from app.services.vpn_service import vpn_service
 from app.services.xui_service import XUIService
+from app.core.security import verify_token
 
 
 
 router = APIRouter()
 
 @router.get("/plans", response_model=List[VPNPlan])
-async def get_vpn_plans():
+async def get_vpn_plans(token: str = Depends(verify_token)):
     """Get all active VPN plans"""
     plans = await VPNPlan.find(VPNPlan.is_active == True).to_list()
     return plans
 
 
 @router.post("/plans/seed")
-async def set_vpn_plans():
+async def set_vpn_plans(token: str = Depends(verify_token)):
     sample_plans = [
         {
             "name": "پلن برنزی",
@@ -55,7 +56,7 @@ async def set_vpn_plans():
 
 
 @router.post("/create/{order_id}")
-async def create_vpn_config(order_id: str, delivery_type: str = "subscription"):
+async def create_vpn_config(order_id: str, delivery_type: str = "subscription", token: str = Depends(verify_token)):
     """Create VPN configuration for an order with multi-panel support"""
     try:
         from bson import ObjectId
@@ -95,7 +96,7 @@ async def create_vpn_config(order_id: str, delivery_type: str = "subscription"):
 
 
 @router.get("/inbounds")
-async def get_inbounds(panel_key: str):
+async def get_inbounds(panel_key: str, token: str = Depends(verify_token)):
     """Get all inbounds from specific 3x-ui panel"""
     from app.core.panel_config import panel_config
     
@@ -110,7 +111,7 @@ async def get_inbounds(panel_key: str):
     return {"panel": panel_info['name'], "panel_key": panel_key, "inbounds": inbounds}
 
 @router.get("/inbounds/all")
-async def get_all_inbounds():
+async def get_all_inbounds(token: str = Depends(verify_token)):
     """Get inbounds from all enabled panels"""
     from app.core.panel_config import panel_config
     
@@ -131,7 +132,7 @@ async def get_all_inbounds():
     return results
 
 @router.post("/test-connection")
-async def test_xui_connection(panel_key: str):
+async def test_xui_connection(panel_key: str, token: str = Depends(verify_token)):
     """Test connection to 3x-ui panel"""
     from app.core.panel_config import panel_config
     
@@ -148,7 +149,7 @@ async def test_xui_connection(panel_key: str):
 
 
 @router.delete("/cancel/{order_id}")
-async def cancel_vpn_config(order_id: str):
+async def cancel_vpn_config(order_id: str, token: str = Depends(verify_token)):
     """Cancel VPN configuration for an order (multi-panel)"""
     try:
         from bson import ObjectId
@@ -172,7 +173,7 @@ async def cancel_vpn_config(order_id: str):
     return {"message": "VPN configs cancelled successfully from all panels"}
 
 @router.get("/configs/{user_token}")
-async def get_user_configs(user_token: str):
+async def get_user_configs(user_token: str, token: str = Depends(verify_token)):
     """Get all config URLs for a user"""
     configs = await vpn_service.get_user_configs(user_token)
     if not configs:
@@ -184,7 +185,7 @@ async def get_user_configs(user_token: str):
     }
 
 @router.get("/check/{order_id}")
-async def check_user_info(order_id: str):
+async def check_user_info(order_id: str, token: str = Depends(verify_token)):
     """Check user info and configs by order ID (for support)"""
     try:
         from bson import ObjectId
@@ -238,7 +239,7 @@ async def check_user_info(order_id: str):
 
 
 @router.get("/panels/list")
-async def list_panels():
+async def list_panels(token: str = Depends(verify_token)):
     """List all configured panels from YAML"""
     from app.core.panel_config import panel_config
     
@@ -257,7 +258,7 @@ async def list_panels():
     }
 
 @router.get("/panels/status")
-async def get_panels_status():
+async def get_panels_status(token: str = Depends(verify_token)):
     """Get user count and status for all panels"""
     from app.core.panel_config import panel_config
     from app.services.load_balancer import load_balancer
@@ -292,7 +293,7 @@ async def get_panels_status():
     return {"panels": panel_status}
 
 @router.post("/balance")
-async def balance_servers():
+async def balance_servers(token: str = Depends(verify_token)):
     """Manually trigger auto-balance across all panels"""
     from app.services.migration_service import migration_service
     
@@ -304,7 +305,7 @@ async def balance_servers():
     }
 
 @router.post("/evacuate/{source_panel_key}")
-async def evacuate_panel(source_panel_key: str, target_panel_key: str = None, reset_traffic: bool = True):
+async def evacuate_panel(source_panel_key: str, target_panel_key: str = None, reset_traffic: bool = True, token: str = Depends(verify_token)):
     """Emergency: Evacuate ALL users from a filtered/blocked panel
     
     Args:
