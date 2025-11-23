@@ -78,6 +78,11 @@ class TelegramBot:
         """Handle reply keyboard button presses"""
         text = update.message.text
         
+        print(f"🔍 Message received: {text[:50]}...")
+        print(f"🔍 waiting_for_broadcast: {context.user_data.get('waiting_for_broadcast')}")
+        print(f"🔍 waiting_for_config_name: {context.user_data.get('waiting_for_config_name')}")
+        print(f"🔍 waiting_for_coupon: {context.user_data.get('waiting_for_coupon')}")
+        
         if "خرید" in text and "VPN" in text:
             from app.bot.handlers.start import show_protocol_selection_message
             await show_protocol_selection_message(update)

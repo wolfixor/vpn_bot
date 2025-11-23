@@ -217,7 +217,7 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
     broadcast_data = {}
     
     # Check if message is forwarded
-    if update.message.forward_origin or update.message.forward_from or update.message.forward_from_chat:
+    if update.message.forward_from or update.message.forward_from_chat or update.message.forward_date:
         broadcast_data["type"] = "forward"
         broadcast_data["message_id"] = update.message.message_id
         broadcast_data["chat_id"] = update.message.chat_id
