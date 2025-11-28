@@ -330,20 +330,39 @@ async def evacuate_panel(source_panel_key: str, target_panel_key: str = None, re
     if not target_panel:
         raise HTTPException(status_code=404, detail=f"Target panel {target_panel_key} not found")
     
-    # Migrate ALL users from source to target
-    result = await migration_service.migrate_users_from_panel(
-        source_panel['name'],
-        target_panel_key,
-        max_users=9999,  # No limit - evacuate all
-        reset_traffic=reset_traffic
-    )
+    # Get all subscriptions from source panel
+    from app.models.subscription import Subscription
+    subscriptions = await Subscription.find(
+        Subscription.is_active == True
+    ).to_list()
+    
+    # Filter subscriptions on source panel
+    source_subs = []
+    for sub in subscriptions:
+        if sub.configs and any(
+            config.panel_name.lower().replace(' ', '') == source_panel['name'].lower().replace(' ', '')
+            for config in sub.configs
+        ):
+            source_subs.append(sub)
+    
+    # Migrate each subscription
+    migrated = 0
+    failed = 0
+    for sub in source_subs:
+        result = await migration_service.migrate_subscription(sub, target_panel_key, reset_traffic)
+        if result.get('success'):
+            migrated += 1
+        else:
+            failed += 1
     
     return {
         "message": f"Evacuation from {source_panel['name']} to {target_panel['name']} completed",
         "source_panel": source_panel['name'],
         "target_panel": target_panel['name'],
         "reset_traffic": reset_traffic,
-        "result": result
+        "total_subscriptions": len(source_subs),
+        "migrated": migrated,
+        "failed": failed
     }
 
 

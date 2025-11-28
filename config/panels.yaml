@@ -11,15 +11,15 @@ panels:
     # Capacity breakdown:
     # - Direct configs: ~25 users (higher capacity)
     # - Tunnel configs: ~15 users (lower capacity due to overhead)
-  server2:
-    name: "Turkey" 
-    direct_ip: "91.216.104.8"
-    url: "http://91.216.104.8:8585/X8KSu6hHzZeZMwp"
-    flag: "🇹🇷"
-    enabled: true
-    max_users: 40  # Total subscriptions (direct + tunnel combined)
-    username_env: "TURKEY_PANEL_USERNAME"  # Environment variable name
-    password_env: "TURKEY_PANEL_PASSWORD"  # Environment variable name
+  # server2:
+  #   name: "Turkey" 
+  #   direct_ip: "91.216.104.8"
+  #   url: "http://91.216.104.8:8585/X8KSu6hHzZeZMwp"
+  #   flag: "🇹🇷"
+  #   enabled: true
+  #   max_users: 40  
+  #   username_env: "TURKEY_PANEL_USERNAME"  
+  #   password_env: "TURKEY_PANEL_PASSWORD"  
   # server3:
   #   name: "France"
   #   direct_ip: "1.2.3.4"
