@@ -31,8 +31,8 @@ async def get_subscription(subscription_token: str, format: str = "base64"):
     
     # Return based on format
     if format.lower() == "json":
-        # Return just the array of configs (simplest format for apps)
-        return all_configs
+        # Return object with configs array (matches Go app expectations)
+        return {"configs": all_configs}
     else:
         # Return base64 encoded configs (V2Ray standard)
         configs_text = "\n".join(all_configs)
