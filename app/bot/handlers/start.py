@@ -177,7 +177,7 @@ async def check_channel_membership_on_start(update, context):
     
     # User is not a member, require channel join
     text = f"خوش آمدید {user_name}! 🎉\n\n"
-    text += "🔒 **عضویت در کانال الزامی است**\n\n"
+    text += "🔒 **لطفا جهت استفاده از ربات عضو چنل اطلاع رسانی شوید**\n\n"
     text += "برای استفاده از این ربات VPN، ابتدا باید در کانال خبری ما عضو شوید:\n\n"
     text += f"📢 **{settings.NEWS_CHANNEL_USERNAME}**\n"
     text += "• دریافت اخبار و به‌روزرسانی‌های VPN\n"
@@ -649,11 +649,16 @@ async def send_subscription_link(query, base_name):
         return
     
     sub_url = f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription.subscription_token}"
+    sub_url_json = f"{sub_url}?format=json"
     
-    text = f"📱 **لینک اشتراک شما:**\n\n`{sub_url}`\n\nکانفیگ های این اشتراک در این لینک قرار دارند."
+    text = f"📱 **لینک اشتراک شما:**\n\n"
+    text += f"🔹 **Base64 (استاندارد):**\n`{sub_url}`\n\n"
+    text += f"🔹 **JSON:**\n`{sub_url_json}`\n\n"
+    text += "📝 کانفیگ های این اشتراک در این لینک ها قرار دارند.\n"
+    text += "⚠️ هر دو لینک را امتحان کنید بعضی اپ ها فقط با یکی کار میکنند."
     
     await query.message.reply_text(text, parse_mode="Markdown")
-    await query.answer("✅ لینک ارسال شد")
+    await query.answer("✅ لینک ها ارسال شد")
 
 async def show_help_message(update):
     """Show help for message handler"""
@@ -1262,7 +1267,7 @@ async def show_help(query):
     text += "• لینکهای اشتراک\n"
     text += "• کانفیگ های جداگانه\n\n"
     text += "📋 **نحوه استفاده:**\n"
-    text += "1. در کانال خبری ما عضو شوید (الزامی)\n"
+    text += "1. لطفا در کانال خبری ما عضو شوید\n"
     text += "2. پروتکل را انتخاب کنید (V2Ray توصیه شده)\n"
     text += "3. یک پلن انتخاب کنید\n"
     text += "4. روش تحویل را انتخاب کنید\n"
