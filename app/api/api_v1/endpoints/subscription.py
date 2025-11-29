@@ -31,11 +31,8 @@ async def get_subscription(subscription_token: str, format: str = "base64"):
     
     # Return based on format
     if format.lower() == "json":
-        return {
-            "subscription_token": subscription_token,
-            "configs": all_configs,
-            "total_configs": len(all_configs)
-        }
+        # Return just the array of configs (simplest format for apps)
+        return all_configs
     else:
         # Return base64 encoded configs (V2Ray standard)
         configs_text = "\n".join(all_configs)
