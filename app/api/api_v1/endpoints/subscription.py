@@ -1,11 +1,12 @@
 import base64
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
 from app.models.user import User
 from app.services.vpn_service import vpn_service
 
 router = APIRouter()
 
-@router.get("/{subscription_token}")
+@router.get("/{subscription_token}", response_class=PlainTextResponse)
 async def get_subscription(subscription_token: str):
     """Get subscription configs by token (base64 encoded)"""
     from app.models.subscription import Subscription
