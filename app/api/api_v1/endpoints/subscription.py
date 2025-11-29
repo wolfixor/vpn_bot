@@ -6,8 +6,13 @@ from app.services.vpn_service import vpn_service
 router = APIRouter()
 
 @router.get("/{subscription_token}")
-async def get_subscription(subscription_token: str):
-    """Get subscription configs by token"""
+async def get_subscription(subscription_token: str, format: str = "base64"):
+    """Get subscription configs by token
+    
+    Args:
+        subscription_token: Subscription token
+        format: Response format - 'base64' (default, V2Ray standard) or 'json'
+    """
     from app.models.subscription import Subscription
     
     # Get subscription
@@ -24,6 +29,14 @@ async def get_subscription(subscription_token: str):
     if not all_configs:
         raise HTTPException(status_code=404, detail="No active configs found")
     
-    # Return base64 encoded configs (V2Ray standard)
-    configs_text = "\n".join(all_configs)
-    return base64.b64encode(configs_text.encode()).decode()
+    # Return based on format
+    if format.lower() == "json":
+        return {
+            "subscription_token": subscription_token,
+            "configs": all_configs,
+            "total_configs": len(all_configs)
+        }
+    else:
+        # Return base64 encoded configs (V2Ray standard)
+        configs_text = "\n".join(all_configs)
+        return base64.b64encode(configs_text.encode()).decode()
