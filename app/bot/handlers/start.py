@@ -649,13 +649,10 @@ async def send_subscription_link(query, base_name):
         return
     
     sub_url = f"{settings.DEFAULT_SUBSCRIPTION_DOMAIN}/api/v1/subscription/{subscription.subscription_token}"
-    sub_url_json = f"{sub_url}?format=json"
     
     text = f"📱 **لینک اشتراک شما:**\n\n"
-    text += f"🔹 **Base64 (استاندارد):**\n`{sub_url}`\n\n"
-    text += f"🔹 **JSON:**\n`{sub_url_json}`\n\n"
-    text += "📝 کانفیگ های این اشتراک در این لینک ها قرار دارند.\n"
-    text += "⚠️ هر دو لینک را امتحان کنید بعضی اپ ها فقط با یکی کار میکنند."
+    text += f"`{sub_url}`\n\n"
+    text += "📝 کانفیگ های این اشتراک در این لینک قرار دارند."
     
     await query.message.reply_text(text, parse_mode="Markdown")
     await query.answer("✅ لینک ها ارسال شد")
@@ -1115,11 +1112,8 @@ async def send_subscription_to_user(context, user, result, plan, order_id=None):
         text += f"🆔 **Order ID:** `{order_id}`\n"
         text += "💡 این شناسه را برای پشتیبانی نگه دارید\n\n"
     
-    text += "📱 **لینک اشتراک (Base64):**\n"
+    text += "📱 **لینک اشتراک:**\n"
     text += f"`{result['subscription_url']}`\n\n"
-    text += "📱 **لینک اشتراک (JSON):**\n"
-    text += f"`{result['subscription_url']}?format=json`\n\n"
-    text += f"`جفت لینک هم امحان کنید بعضی اپ ها فقط با اولی کار میکنن و بعضی ها با دومی`\n\n"
     text += "📝 **نکته:** اگر لینک کار نکرد، کانفیگ ها را از گزینه 'کانفیگ های من' به صورت تکی دریافت کنید\n"
     text += "**نحوه استفاده:**\n"
     text += "1. لینک اشتراک را کپی کنید\n"

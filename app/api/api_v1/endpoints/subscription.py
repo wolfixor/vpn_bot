@@ -6,13 +6,8 @@ from app.services.vpn_service import vpn_service
 router = APIRouter()
 
 @router.get("/{subscription_token}")
-async def get_subscription(subscription_token: str, format: str = "base64"):
-    """Get subscription configs by token
-    
-    Args:
-        subscription_token: Subscription token
-        format: Response format - 'base64' (default, V2Ray standard) or 'json'
-    """
+async def get_subscription(subscription_token: str):
+    """Get subscription configs by token (base64 encoded)"""
     from app.models.subscription import Subscription
     
     # Get subscription
@@ -29,11 +24,6 @@ async def get_subscription(subscription_token: str, format: str = "base64"):
     if not all_configs:
         raise HTTPException(status_code=404, detail="No active configs found")
     
-    # Return based on format
-    if format.lower() == "json":
-        # Return object with configs array (matches Go app expectations)
-        return {"configs": all_configs}
-    else:
-        # Return base64 encoded configs (V2Ray standard)
-        configs_text = "\n".join(all_configs)
-        return base64.b64encode(configs_text.encode()).decode()
+    # Return base64 encoded configs (standard subscription format)
+    configs_text = "\n".join(all_configs)
+    return base64.b64encode(configs_text.encode()).decode()
