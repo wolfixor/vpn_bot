@@ -7,27 +7,19 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    environment:
-      - ENVIRONMENT=production
-      - MONGODB_URL=${MONGODB_URL}
-      - DATABASE_NAME=${DATABASE_NAME}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - NEWS_CHANNEL_USERNAME=${NEWS_CHANNEL_USERNAME}
-      - NEWS_CHANNEL_URL=${NEWS_CHANNEL_URL}
-      - PAYMENT_CHANNEL_ID=${PAYMENT_CHANNEL_ID}
-      - GERMANY_PANEL_USERNAME=${GERMANY_PANEL_USERNAME}
-      - GERMANY_PANEL_PASSWORD=${GERMANY_PANEL_PASSWORD}
-      - TURKEY_PANEL_USERNAME=${TURKEY_PANEL_USERNAME}
-      - TURKEY_PANEL_PASSWORD=${TURKEY_PANEL_PASSWORD}
-      - CARD_NUMBER=${CARD_NUMBER}
-      - NAME_CARD=${NAME_CARD}
-      - TETHER=${TETHER}
-      - TRON=${TRON}
-      - SOLANA=${SOLANA}
+    env_file:
+      - .env
     volumes:
       - ./logs:/app/logs
+      - ./config/panels.yaml:/app/config/panels.yaml:ro
     networks:
       - vpn_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   nginx:
     image: nginx:alpine
