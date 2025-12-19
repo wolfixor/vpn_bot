@@ -103,27 +103,28 @@ async def handle_admin_callback(query, context):
     elif data == "admin_users":
         users = await User.find_all().limit(10).to_list()
         
-        text = "👥 **لیست کاربران (10 نفر اول)**\n\n"
+        text = "👥 لیست کاربران (10 نفر اول)\n\n"
         for user in users:
-            text += f"• {user.first_name} (@{user.username or 'N/A'}) - ID: `{user.telegram_id}`\n"
+            username = user.username or 'N/A'
+            text += f"• {user.first_name} (@{username}) - ID: {user.telegram_id}\n"
         
         keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif data == "admin_pending":
         from app.models.payment import Payment
         
         pending = await Payment.find({"status": "pending"}).limit(5).to_list()
         
-        text = "💳 **پرداختهای معلق (5 تا اول)**\n\n"
+        text = "💳 پرداختهای معلق (5 تا اول)\n\n"
         if not pending:
             text += "✅ هیچ پرداخت معلقی وجود ندارد."
         else:
             for p in pending:
-                text += f"• تومان{p.amount / 1000} - User: `{p.user_telegram_id}`\n"
+                text += f"• {int(p.amount / 1000)} تومان - User: {p.user_telegram_id}\n"
         
         keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif data == "admin_back":
         text = "🔑 **پنل مدیریت**\n\n"

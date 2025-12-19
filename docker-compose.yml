@@ -14,6 +14,9 @@ services:
       - ./config/panels.yaml:/app/config/panels.yaml:ro
     networks:
       - vpn_network
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
       interval: 30s
