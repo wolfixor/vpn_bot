@@ -100,15 +100,42 @@ async def handle_admin_callback(query, context):
         
         await query.edit_message_text(text, parse_mode="Markdown")
     
-    elif data == "admin_users":
-        users = await User.find_all().limit(10).to_list()
+    elif data == "admin_users" or data.startswith("admin_users_page_"):
+        # Get page number
+        page = 1
+        if data.startswith("admin_users_page_"):
+            page = int(data.split("_")[-1])
         
-        text = "👥 لیست کاربران (10 نفر اول)\n\n"
+        # Pagination settings
+        per_page = 10
+        skip = (page - 1) * per_page
+        
+        # Get total count and users
+        total_users = await User.find_all().count()
+        users = await User.find_all().skip(skip).limit(per_page).to_list()
+        
+        total_pages = (total_users + per_page - 1) // per_page
+        
+        text = f"👥 لیست کاربران (صفحه {page}/{total_pages})\n"
+        text += f"کل کاربران: {total_users}\n\n"
+        
         for user in users:
             username = user.username or 'N/A'
             text += f"• {user.first_name} (@{username}) - ID: {user.telegram_id}\n"
         
-        keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
+        # Pagination buttons
+        keyboard = []
+        nav_buttons = []
+        
+        if page > 1:
+            nav_buttons.append(InlineKeyboardButton("⬅️ قبلی", callback_data=f"admin_users_page_{page-1}"))
+        if page < total_pages:
+            nav_buttons.append(InlineKeyboardButton("بعدی ➡️", callback_data=f"admin_users_page_{page+1}"))
+        
+        if nav_buttons:
+            keyboard.append(nav_buttons)
+        
+        keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")])
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif data == "admin_pending":

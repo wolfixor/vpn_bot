@@ -23,8 +23,8 @@ def get_protocol_selection_keyboard():
     """Protocol selection keyboard"""
     keyboard = [
         [InlineKeyboardButton("🔹 V2Ray (VLESS + Trojan)", callback_data="protocol_v2ray")],
-        [InlineKeyboardButton("🔸 OpenVPN (به زودی)", callback_data="protocol_openvpn")],
-        [InlineKeyboardButton("🔹 WireGuard (به زودی)", callback_data="protocol_wireguard")],
+        # [InlineKeyboardButton("🔸 OpenVPN (به زودی)", callback_data="protocol_openvpn")],
+        # [InlineKeyboardButton("🔹 WireGuard (به زودی)", callback_data="protocol_wireguard")],
         [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")]
     ]
     return InlineKeyboardMarkup(keyboard)

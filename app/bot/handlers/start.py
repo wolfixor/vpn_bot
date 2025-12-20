@@ -364,8 +364,8 @@ async def show_protocol_selection_message(update):
     # text += "   • VLESS WebSocket TLS\n"
     # text += "   • VLESS gRPC TLS\n"
     # text += "   • Trojan Reality\n\n"
-    text += "🔸 **OpenVPN** - به زودی\n"
-    text += "🔹 **WireGuard** - به زودی\n\n"
+    # text += "🔸 **OpenVPN** - به زودی\n"
+    # text += "🔹 **WireGuard** - به زودی\n\n"
     text += "پروتکل مورد نظر خود را انتخاب کنید:"
     
     await update.message.reply_text(text, reply_markup=get_protocol_selection_keyboard(), parse_mode="Markdown")
@@ -732,8 +732,8 @@ async def show_protocol_selection(query, context=None):
     # text += "   • VLESS WebSocket TLS\n"
     # text += "   • VLESS gRPC TLS\n"
     # text += "   • Trojan Reality\n\n"
-    text += "🔸 **OpenVPN** - به زودی\n"
-    text += "🔹 **WireGuard** - به زودی\n\n"
+    # text += "🔸 **OpenVPN** - به زودی\n"
+    # text += "🔹 **WireGuard** - به زودی\n\n"
     text += "پروتکل مورد نظر خود را انتخاب کنید:"
     
     try:
@@ -1255,7 +1255,7 @@ async def show_help(query):
     text += f"📢 **کانال ما:**\n"
     text += f"• {settings.NEWS_CHANNEL_USERNAME} - اخبار و به روزرسانی\n\n"
     text += "🔧 **ویژگی ها:**\n"
-    text += "• پروتکل های متعدد (V2Ray, OpenVPN, WireGuard)\n"
+    text += "• پروتکل های متعدد (V2Ray, OpenVPN(به زودی), WireGuard(به زودی))\n"
     text += "• سرورهای متعدد (آلمان، ترکیه، بیشتر در راه)\n"
     text += "• تعویض خودکار\n"
     text += "• لینکهای اشتراک\n"
