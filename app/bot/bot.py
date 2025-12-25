@@ -76,6 +76,9 @@ class TelegramBot:
     
     async def _handle_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle reply keyboard button presses"""
+        if not update.message or not update.message.text:
+            return
+        
         text = update.message.text
         
         print(f"🔍 Message received: {text[:50]}...")
