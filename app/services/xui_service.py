@@ -30,7 +30,7 @@ class XUIService:
     
     async def login(self) -> Optional[str]:
         """Login to 3x-ui panel and return session cookie"""
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.post(
                 f"{self.base_url}/login",
                 data={
@@ -56,7 +56,7 @@ class XUIService:
         if not cookie:
             return "failed to login"
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             try:
                 response = await client.get(
                     f"{self.base_url}/panel/api/inbounds/list",
@@ -128,7 +128,7 @@ class XUIService:
                 }]
             }
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.post(
                 f"{self.base_url}/panel/api/inbounds/addClient",
                 data={
@@ -212,7 +212,7 @@ class XUIService:
         if not cookie:
             return False
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.post(
                 f"{self.base_url}/panel/api/inbounds/{inbound_id}/delClient/{client_uuid}",
                 cookies={"3x-ui": cookie}
@@ -225,7 +225,7 @@ class XUIService:
         if not cookie:
             return None
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.get(
                 f"{self.base_url}/panel/api/inbounds/getClientTraffics/{client_email}",
                 cookies={"3x-ui": cookie}
@@ -247,7 +247,7 @@ class XUIService:
         if not cookie:
             return None
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.get(
                 f"{self.base_url}/panel/api/inbounds/get/{inbound_id}",
                 cookies={"3x-ui": cookie}
@@ -271,7 +271,7 @@ class XUIService:
         if not cookie:
             return None
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             response = await client.post(
                 f"{self.base_url}/panel/api/inbounds/add",
                 json=inbound_data,
