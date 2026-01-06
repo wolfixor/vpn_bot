@@ -1,16 +1,13 @@
 panels:
   server1:
-    name: "Germany"
-    direct_ip: "185.110.188.73"
-    url: "https://185.110.188.73:8585/40ddBvHqnvDfdbjB55"
-    flag: "🇩🇪"
+    name: "Netherlands"
+    direct_ip: "154.211.2.120"
+    url: "http://154.211.2.120:8585/5tCuQeWbZ57vOGLhqA"
+    flag: "🇳🇱"
     enabled: true
-    max_users: 40  # Total subscriptions (direct + tunnel combined)
-    username_env: "GERMANY_PANEL_USERNAME"  # Environment variable name
-    password_env: "GERMANY_PANEL_PASSWORD"  # Environment variable name
-    # Capacity breakdown:
-    # - Direct configs: ~25 users (higher capacity)
-    # - Tunnel configs: ~15 users (lower capacity due to overhead)
+    max_users: 40
+    username_env: "PANEL_USERNAME"
+    password_env: "PANEL_PASSWORD"
   # server2:
   #   name: "Turkey" 
   #   direct_ip: "91.216.104.8"
@@ -30,7 +27,7 @@ panels:
 
 # Global tunnel IPs - any inbound using these IPs is tunnel
 tunnel_ips:
-  - "62.3.42.11"
+  - "37.152.190.158"
 
 # Global settings
 settings:
