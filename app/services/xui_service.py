@@ -30,24 +30,38 @@ class XUIService:
     
     async def login(self) -> Optional[str]:
         """Login to 3x-ui panel and return session cookie"""
+        print(f"🔐 Attempting login to {self.base_url}")
+        print(f"   Username: {self.username}")
+        print(f"   Password: {'*' * len(self.password)}")
+        
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            response = await client.post(
-                f"{self.base_url}/login",
-                data={
-                    "username": self.username,
-                    "password": self.password
-                }
-            )
-            if response.status_code == 200:
-                if '3x-ui' in response.cookies:
-                    cookie = response.cookies['3x-ui']
-                    self.session_cookie = cookie
-                    return cookie
+            try:
+                response = await client.post(
+                    f"{self.base_url}/login",
+                    data={
+                        "username": self.username,
+                        "password": self.password
+                    }
+                )
+                print(f"📡 Response status: {response.status_code}")
+                print(f"🍪 Cookies received: {list(response.cookies.keys())}")
+                print(f"📄 Response body: {response.text[:200]}")
+                
+                if response.status_code == 200:
+                    if '3x-ui' in response.cookies:
+                        cookie = response.cookies['3x-ui']
+                        self.session_cookie = cookie
+                        print(f"✅ Login successful!")
+                        return cookie
+                    else:
+                        print(f"❌ Login failed: No session cookie received")
+                        print(f"   Available cookies: {list(response.cookies.keys())}")
+                        return None
                 else:
-                    print("Login failed: No session cookie received")
+                    print(f"❌ Login failed: HTTP {response.status_code}")
                     return None
-            else:
-                print(f"Login failed: HTTP {response.status_code}")
+            except Exception as e:
+                print(f"❌ Login exception: {type(e).__name__}: {str(e)}")
                 return None
     
     async def get_inbounds(self) -> Optional[Dict[str, Any]]:
