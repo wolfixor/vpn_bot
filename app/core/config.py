@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     API_TOKEN: str = "your-secure-api-token-change-in-production"
     
     # Panel Credentials
+    PANEL_USERNAME: str = "admin"
+    PANEL_PASSWORD: str = "password"
     GERMANY_PANEL_USERNAME: str = "admin"
     GERMANY_PANEL_PASSWORD: str = "password"
     TURKEY_PANEL_USERNAME: str = "admin"
