@@ -17,7 +17,8 @@ class InboundBalancerService:
         
         # Get all inbounds from panel
         inbounds_response = await panel_service.get_inbounds()
-        if not inbounds_response or not inbounds_response.get("success"):
+        if not inbounds_response or isinstance(inbounds_response, str) or not inbounds_response.get("success"):
+            print(f"❌ Failed to get inbounds: {inbounds_response}")
             return []
         
         tunnel_inbounds = []
