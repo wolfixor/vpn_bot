@@ -1325,7 +1325,8 @@ async def handle_test_config(query, context):
         sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
         if sub and sub.is_active and "test" in sub.base_name.lower():
             logger.warning(f"[TEST_CONFIG] User {user.id} already has test subscription: {sub.base_name}")
-            await query.answer("❌ شما قبلاً تست رایگان دریافت کردهاید", show_alert=True)
+            text = "❌ **تست رایگان قبلاً دریافت شده**\n\nشما قبلاً تست رایگان دریافت کردهاید.\n\nبرای خرید پلن کامل از 🛒 خرید VPN استفاده کنید."
+            await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
             return
     
     logger.info(f"[TEST_CONFIG] Creating test config for user {user.id}")
