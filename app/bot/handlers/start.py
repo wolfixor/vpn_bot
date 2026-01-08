@@ -1298,24 +1298,37 @@ async def show_help(query):
 
 async def handle_test_config(query, context):
     """Handle test config request"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"[TEST_CONFIG] Handler called by user {query.from_user.id}")
+    
     from app.core.panel_config import panel_config
     
     test_config = panel_config.get_test_config_settings()
+    logger.info(f"[TEST_CONFIG] Test config settings: {test_config}")
+    
     if not test_config.get('enabled', False):
+        logger.warning(f"[TEST_CONFIG] Test config disabled for user {query.from_user.id}")
         await query.answer("❌ تست رایگان غیرفعال است", show_alert=True)
         return
     
     user = await User.find_one(User.telegram_id == query.from_user.id)
     if not user:
+        logger.error(f"[TEST_CONFIG] User not found: {query.from_user.id}")
         await query.answer("❌ کاربر یافت نشد", show_alert=True)
         return
+    
+    logger.info(f"[TEST_CONFIG] User found: {user.id}, checking existing subscriptions")
     
     for sub_link in user.subscriptions:
         sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
         if sub and sub.is_active and "test" in sub.base_name.lower():
+            logger.warning(f"[TEST_CONFIG] User {user.id} already has test subscription: {sub.base_name}")
             await query.answer("❌ شما قبلاً تست رایگان دریافت کردهاید", show_alert=True)
             return
     
+    logger.info(f"[TEST_CONFIG] Creating test config for user {user.id}")
     await query.answer("⏳ در حال ایجاد تست رایگان...")
     await query.edit_message_text("⏳ **در حال ایجاد کانفیگ تست...**\n\nلطفاً چند لحظه صبر کنید.", parse_mode="Markdown")
     
@@ -1325,6 +1338,8 @@ async def handle_test_config(query, context):
     duration_days = test_config.get('duration_days', 10)
     traffic_gb = test_config.get('traffic_gb', 2)
     
+    logger.info(f"[TEST_CONFIG] Creating test plan: {traffic_gb}GB, {duration_days} days")
+    
     test_plan = VPNPlan(
         name=f"تست {traffic_gb}GB - {duration_days} روز",
         traffic_limit_gb=traffic_gb,
@@ -1333,6 +1348,7 @@ async def handle_test_config(query, context):
         is_active=True
     )
     await test_plan.insert()
+    logger.info(f"[TEST_CONFIG] Test plan created: {test_plan.id}")
     
     order = Order(
         user=user,
@@ -1342,10 +1358,22 @@ async def handle_test_config(query, context):
         status=OrderStatus.COMPLETED
     )
     await order.save()
+    logger.info(f"[TEST_CONFIG] Order created: {order.id}")
     
-    result = await vpn_service.create_subscription(order, f"test_{user.telegram_id}")
+    try:
+        result = await vpn_service.create_subscription(order, f"test_{user.telegram_id}")
+        logger.info(f"[TEST_CONFIG] Subscription result: {result}")
+    except Exception as e:
+        logger.error(f"[TEST_CONFIG] Error creating subscription: {e}", exc_info=True)
+        await query.edit_message_text(
+            "❌ **خطا در ایجاد تست**\n\nلطفاً بعداً دوباره تلاش کنید.",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
     
     if result and result.get("total_configs", 0) > 0:
+        logger.info(f"[TEST_CONFIG] Success! Total configs: {result.get('total_configs')}")
         text = "✅ **تست رایگان آماده است!**\n\n"
         text += f"📦 **پلن:** {test_plan.name}\n"
         text += f"📊 **حجم:** {traffic_gb}GB\n"
@@ -1367,6 +1395,7 @@ async def handle_test_config(query, context):
             
             await query.message.reply_text(configs_text, parse_mode="HTML")
     else:
+        logger.error(f"[TEST_CONFIG] Failed to create configs. Result: {result}")
         await query.edit_message_text(
             "❌ **خطا در ایجاد تست**\n\nلطفاً بعداً دوباره تلاش کنید.",
             reply_markup=get_main_menu_keyboard(),
