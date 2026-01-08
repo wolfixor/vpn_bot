@@ -1414,6 +1414,16 @@ async def show_test_config_inline(update):
         await update.message.reply_text("❌ تست رایگان غیرفعال است", parse_mode="Markdown")
         return
     
+    # Check if user already has test config
+    user = await User.find_one(User.telegram_id == update.effective_user.id)
+    if user:
+        for sub_link in user.subscriptions:
+            sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
+            if sub and sub.is_active and "test" in sub.base_name.lower():
+                text = "❌ **تست رایگان قبلاً دریافت شده**\n\nشما قبلاً تست رایگان دریافت کردهاید.\n\nبرای خرید پلن کامل از 🛒 خرید VPN استفاده کنید."
+                await update.message.reply_text(text, parse_mode="Markdown")
+                return
+    
     text = "🧪 **تست رایگان VPN**\n\n"
     text += f"📊 **حجم:** {test_config.get('traffic_gb', 2)}GB\n"
     text += f"⏱️ **مدت:** {test_config.get('duration_days', 10)} روز\n\n"
