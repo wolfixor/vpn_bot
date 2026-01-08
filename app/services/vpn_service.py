@@ -291,7 +291,12 @@ class VPNService:
                             is_tunnel = panel_config.is_tunnel_ip(inbound_ip)
                             config_ip = inbound_ip if is_tunnel else panel_info['direct_ip']
                             
-                            config_url = self.generate_config_url_from_item(config_item, inbound_data, config_ip)
+                            # Generate display name: location + type
+                            inbound_type = "tunnel" if is_tunnel else "direct"
+                            panel_location = panel_info['name'].lower().replace(' ', '_')
+                            display_name = f"{panel_location}_{inbound_type}"
+                            
+                            config_url = self.generate_config_url_from_item(config_item, inbound_data, config_ip, display_name)
                             if config_url:
                                 all_configs.append(config_url)
                             break
