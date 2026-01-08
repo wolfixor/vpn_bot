@@ -43,7 +43,7 @@ settings:
   # Test Config Settings
   test_config:
     enabled: true  # Enable/disable test config button
-    duration_days: 10  # Test config duration in days
+    duration_days: 14  # Test config duration in days
     traffic_gb: 10  # Test config traffic limit in GB
   
 # Load balancing notes:
