@@ -86,6 +86,9 @@ class VPNService:
         
         print(f"🎯 Selected {len(selected_panels)} panels for user: {[p[1]['name'] for p in selected_panels]}")
         
+        # Track config numbers per panel+type combination
+        config_counter = {}
+        
         # Create configs on SELECTED panels (multi-panel load balancing)
         for selected_panel_name, selected_panel_info in selected_panels:
             panel_service = XUIService(selected_panel_name)
@@ -104,11 +107,15 @@ class VPNService:
                 inbound_type = "tunnel" if inbound_info["is_tunnel"] else "direct"
                 panel_location = selected_panel_info['name'].lower().replace(' ', '_')
                 
+                # Track counter for this panel+type combination
+                counter_key = f"{panel_location}_{inbound_type}"
+                config_counter[counter_key] = config_counter.get(counter_key, 0) + 1
+                
                 # For internal tracking (full name with base_name and inbound_id for uniqueness)
                 client_email = f"{base_name}_{selected_panel_name}_inbound{inbound_id}"
                 
-                # For display in VPN app (just location + type)
-                display_name = f"{panel_location}_{inbound_type}"
+                # For display in VPN app (location + number + type)
+                display_name = f"{panel_location}{config_counter[counter_key]}_{inbound_type}"
                 
                 print(f"📧 Creating client: {client_email} (display: {display_name}, inbound {inbound_id})")
                 
@@ -272,6 +279,7 @@ class VPNService:
             return []
         
         all_configs = []
+        config_counter = {}
         
         for config_item in subscription.configs:
             # Find panel dynamically by name
@@ -291,10 +299,12 @@ class VPNService:
                             is_tunnel = panel_config.is_tunnel_ip(inbound_ip)
                             config_ip = inbound_ip if is_tunnel else panel_info['direct_ip']
                             
-                            # Generate display name: location + type
+                            # Generate display name: location + number + type
                             inbound_type = "tunnel" if is_tunnel else "direct"
                             panel_location = panel_info['name'].lower().replace(' ', '_')
-                            display_name = f"{panel_location}_{inbound_type}"
+                            counter_key = f"{panel_location}_{inbound_type}"
+                            config_counter[counter_key] = config_counter.get(counter_key, 0) + 1
+                            display_name = f"{panel_location}{config_counter[counter_key]}_{inbound_type}"
                             
                             config_url = self.generate_config_url_from_item(config_item, inbound_data, config_ip, display_name)
                             if config_url:
