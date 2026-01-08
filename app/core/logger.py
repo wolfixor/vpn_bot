@@ -5,16 +5,19 @@ from pathlib import Path
 
 # Create logs directory
 LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
+try:
+    LOG_DIR.mkdir(exist_ok=True)
+    file_handler = logging.FileHandler(LOG_DIR / "bot.log")
+    handlers = [file_handler, logging.StreamHandler(sys.stdout)]
+except (PermissionError, OSError):
+    # If can't write to file, just use stdout
+    handlers = [logging.StreamHandler(sys.stdout)]
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_DIR / "bot.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=handlers
 )
 
 logger = logging.getLogger("vpn_bot")
