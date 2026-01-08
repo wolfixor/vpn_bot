@@ -39,5 +39,17 @@ class PanelConfig:
             if panel['name'].lower() == name.lower():
                 return key, panel
         return None, None
+    
+    @classmethod
+    def get_max_panels_per_user(cls) -> int:
+        """Get max panels per user from settings"""
+        config = cls.load()
+        return config.get('settings', {}).get('max_panels_per_user', 1)
+    
+    @classmethod
+    def get_max_tunnels_per_panel(cls) -> int:
+        """Get max tunnels per panel from settings (0 = all tunnels)"""
+        config = cls.load()
+        return config.get('settings', {}).get('max_tunnels_per_panel', 1)
 
 panel_config = PanelConfig()

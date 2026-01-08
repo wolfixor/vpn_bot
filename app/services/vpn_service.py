@@ -51,63 +51,87 @@ class VPNService:
         # Get ALL enabled panels from config
         enabled_panels = panel_config.get_enabled_panels()
         
-        # Check server capacity but NEVER stop creation
-        selected_panel_name = await load_balancer.get_available_server()
-        if not selected_panel_name:
-            # If all servers full, use first available and send alert
-            selected_panel_name = list(enabled_panels.keys())[0]
-            await self._send_capacity_alert("All servers at capacity - creating user anyway")
+        # MULTI-PANEL MODE: Read max panels per user from config
+        MAX_PANELS_PER_USER = panel_config.get_max_panels_per_user()
+        print(f"📋 Max panels per user: {MAX_PANELS_PER_USER}")
         
-        # Create configs on SELECTED server only (proper load balancing)
-        selected_panel_info = enabled_panels.get(selected_panel_name)
-        if not selected_panel_info:
-            selected_panel_name = list(enabled_panels.keys())[0]
-            selected_panel_info = enabled_panels[selected_panel_name]
+        from app.services.load_balancer import load_balancer
+        await load_balancer.sync_server_loads()
         
-        panel_service = XUIService(selected_panel_name)
+        # Get servers sorted by load (lowest first)
+        from app.models.server_load import ServerLoad
+        enabled_names = [info['name'] for info in enabled_panels.values()]
+        servers = await ServerLoad.find(
+            {"is_active": True, "panel_name": {"$in": enabled_names}}
+        ).sort(+ServerLoad.current_subscriptions).to_list()
         
-        # Get ALL direct + 1 tunnel inbound from SELECTED panel only
-        from app.services.inbound_balancer import inbound_balancer
+        # Select top N panels with capacity
+        selected_panels = []
+        for server in servers:
+            if len(selected_panels) >= MAX_PANELS_PER_USER:
+                break
+            # Find panel key from server name
+            for key, info in enabled_panels.items():
+                if info['name'] == server.panel_name:
+                    selected_panels.append((key, info))
+                    break
         
-        selected_inbounds = await inbound_balancer.get_balanced_inbounds(selected_panel_name)
+        # Fallback if not enough servers in DB
+        if len(selected_panels) < MAX_PANELS_PER_USER:
+            for key, info in enabled_panels.items():
+                if len(selected_panels) >= MAX_PANELS_PER_USER:
+                    break
+                if not any(p[0] == key for p in selected_panels):
+                    selected_panels.append((key, info))
         
-        for inbound_info in selected_inbounds:
-            inbound_data = inbound_info["data"]
-            inbound_id = inbound_data["id"]
-            client_id = str(uuid.uuid4())
-            client_email = f"{base_name}_{selected_panel_name}_inbound{inbound_id}"
-            print(f"📧 Creating client: {client_email} (inbound {inbound_id})")
+        print(f"🎯 Selected {len(selected_panels)} panels for user: {[p[1]['name'] for p in selected_panels]}")
+        
+        # Create configs on SELECTED panels (multi-panel load balancing)
+        for selected_panel_name, selected_panel_info in selected_panels:
+            panel_service = XUIService(selected_panel_name)
             
-            result = await panel_service.add_client(
-                inbound_id=inbound_id,
-                client_email=client_email,
-                client_id=client_id,
-                total_gb=actual_limit,
-                expire_time=expiry_timestamp
-            )
+            # Get ALL direct + 1 tunnel inbound from each selected panel
+            from app.services.inbound_balancer import inbound_balancer
             
-            if result and result.get("success"):
-                protocol = inbound_data.get("protocol", "vless")
-                stored_id = client_id[:10] if protocol == "trojan" else client_id
+            selected_inbounds = await inbound_balancer.get_balanced_inbounds(selected_panel_name)
+        
+            for inbound_info in selected_inbounds:
+                inbound_data = inbound_info["data"]
+                inbound_id = inbound_data["id"]
+                client_id = str(uuid.uuid4())
+                client_email = f"{base_name}_{selected_panel_name}_inbound{inbound_id}"
+                print(f"📧 Creating client: {client_email} (inbound {inbound_id})")
                 
-                config_item = ConfigItem(
-                    panel_name=selected_panel_info['name'],
+                result = await panel_service.add_client(
                     inbound_id=inbound_id,
-                    client_uuid=stored_id,
                     client_email=client_email,
-                    client_password=client_id[:10] if protocol == "trojan" else None
+                    client_id=client_id,
+                    total_gb=actual_limit,
+                    expire_time=expiry_timestamp
                 )
-                config_items.append(config_item)
                 
-                config_url = self.generate_config_url_from_item(config_item, inbound_data, inbound_info["ip"])
-                if config_url:
-                    all_config_urls.append({"config": config_url, "panel_flag": selected_panel_info['flag']})
-                
-                inbound_type = "tunnel" if inbound_info["is_tunnel"] else "direct"
-                print(f"✅ Added to {selected_panel_info['name']} inbound {inbound_id} ({inbound_type}) - {inbound_info['client_count']} existing clients")
-        
-        # Track subscription on selected server
-        await load_balancer.allocate_subscription_to_server(selected_panel_name)
+                if result and result.get("success"):
+                    protocol = inbound_data.get("protocol", "vless")
+                    stored_id = client_id[:10] if protocol == "trojan" else client_id
+                    
+                    config_item = ConfigItem(
+                        panel_name=selected_panel_info['name'],
+                        inbound_id=inbound_id,
+                        client_uuid=stored_id,
+                        client_email=client_email,
+                        client_password=client_id[:10] if protocol == "trojan" else None
+                    )
+                    config_items.append(config_item)
+                    
+                    config_url = self.generate_config_url_from_item(config_item, inbound_data, inbound_info["ip"])
+                    if config_url:
+                        all_config_urls.append({"config": config_url, "panel_flag": selected_panel_info['flag']})
+                    
+                    inbound_type = "tunnel" if inbound_info["is_tunnel"] else "direct"
+                    print(f"✅ Added to {selected_panel_info['name']} inbound {inbound_id} ({inbound_type}) - {inbound_info['client_count']} existing clients")
+            
+            # Track subscription on each selected panel
+            await load_balancer.allocate_subscription_to_server(selected_panel_name)
         
         subscription = Subscription(
             subscription_token=subscription_token,

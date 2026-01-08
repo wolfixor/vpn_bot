@@ -54,19 +54,25 @@ class InboundBalancerService:
         
         selected_inbounds = []
         
-        # Strategy: Give user ALL direct inbounds + 1 least loaded tunnel
+        # Strategy: Give user ALL direct inbounds + N least loaded tunnels
         # Add ALL direct inbounds
         selected_inbounds.extend(direct_inbounds)
         
-        # Add 1 least loaded tunnel inbound if available
-        if tunnel_inbounds:
-            selected_inbounds.append(tunnel_inbounds[0])
+        # Add N least loaded tunnel inbounds (0 = all tunnels)
+        max_tunnels = panel_config.get_max_tunnels_per_panel()
+        if max_tunnels == 0:
+            # 0 means ALL tunnels
+            selected_inbounds.extend(tunnel_inbounds)
+            tunnel_count = len(tunnel_inbounds)
+        else:
+            # Add only N least loaded tunnels
+            selected_inbounds.extend(tunnel_inbounds[:max_tunnels])
+            tunnel_count = min(max_tunnels, len(tunnel_inbounds))
         
         print(f"🎯 Selected {len(selected_inbounds)} inbounds from {panel_info['name']}")
         direct_count = len(direct_inbounds)
-        tunnel_count = 1 if tunnel_inbounds else 0
         print(f"  • Direct inbounds: {direct_count} (ALL)")
-        print(f"  • Tunnel inbounds: {tunnel_count} (least loaded)")
+        print(f"  • Tunnel inbounds: {tunnel_count} {'(ALL)' if max_tunnels == 0 else f'(top {max_tunnels})'}")
         
         for inbound in selected_inbounds:
             inbound_type = "tunnel" if inbound["is_tunnel"] else "direct"

@@ -31,6 +31,8 @@ tunnel_ips:
 
 # Global settings
 settings:
+  max_panels_per_user: 1  # Number of panels each user gets configs from (0 = all panels)
+  max_tunnels_per_panel: 1  # Number of tunnel configs per panel (0 = all tunnels)
   alert_threshold: 0.9  # Send alert at 90% capacity
   never_stop_creation: true  # Always create users even if servers full
   traffic_aggregation: true  # Aggregate traffic from all panels
