@@ -1,4 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from app.core.panel_config import panel_config
 
 def get_main_menu_keyboard():
     """Main menu keyboard"""
@@ -9,6 +10,9 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("📋 فاکتور های من", callback_data="my_orders")],
         [InlineKeyboardButton("ℹ️ راهنما", callback_data="help")]
     ]
+    test_config = panel_config.get_test_config_settings()
+    if test_config.get('enabled', False):
+        keyboard.insert(1, [InlineKeyboardButton("🧪 تست رایگان", callback_data="test_config")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_channel_verification_keyboard(channel_url):
@@ -86,6 +90,9 @@ def get_persistent_menu_keyboard():
         [InlineKeyboardButton("📋 فاکتور های من", callback_data="my_orders")],
         [InlineKeyboardButton("ℹ️ راهنما", callback_data="help"), InlineKeyboardButton("🔄 شروع مجدد", callback_data="restart")]
     ]
+    test_config = panel_config.get_test_config_settings()
+    if test_config.get('enabled', False):
+        keyboard.insert(1, [InlineKeyboardButton("🧪 تست رایگان", callback_data="test_config")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_payment_methods_keyboard():

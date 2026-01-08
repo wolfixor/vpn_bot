@@ -63,5 +63,15 @@ class PanelConfig:
         """Get health check interval in seconds"""
         config = cls.load()
         return config.get('settings', {}).get('health_check_interval', 300)
+    
+    @classmethod
+    def get_test_config_settings(cls) -> Dict[str, Any]:
+        """Get test config settings"""
+        config = cls.load()
+        return config.get('settings', {}).get('test_config', {
+            'enabled': True,
+            'duration_days': 10,
+            'traffic_gb': 2
+        })
 
 panel_config = PanelConfig()

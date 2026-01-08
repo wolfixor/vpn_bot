@@ -141,6 +141,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_vpn_plans(query, protocol, duration)
     elif data == "restart":
         await restart_bot(query, context)
+    elif data == "test_config":
+        await handle_test_config(query, context)
     elif data == "skip_coupon":
         context.user_data["waiting_for_coupon"] = False
         await show_payment_methods_callback(query)
@@ -1112,21 +1114,32 @@ async def send_subscription_to_user(context, user, result, plan, order_id=None):
         text += f"🆔 **Order ID:** `{order_id}`\n"
         text += "💡 این شناسه را برای پشتیبانی نگه دارید\n\n"
     
-    text += "📱 **لینک اشتراک:**\n"
+    text += "📱 **لینک اشتراک شما:**\n\n"
     text += f"`{result['subscription_url']}`\n\n"
-    text += "📝 **نکته:** اگر لینک کار نکرد، کانفیگ ها را از گزینه 'کانفیگ های من' به صورت تکی دریافت کنید\n"
-    text += "**نحوه استفاده:**\n"
-    text += "1. لینک اشتراک را کپی کنید\n"
-    text += "2. به کلاینت V2Ray خود اضافه کنید\n"
-    text += "3. اشتراک را به روزرسانی کنید\n"
-    text += "4. به هر سروری وصل شوید!\n\n"
-    
+    text += "📝 کانفیگ های این اشتراک در این لینک قرار دارند.\n\n"
     
     await context.bot.send_message(
         chat_id=user.telegram_id,
         text=text,
         parse_mode="Markdown"
     )
+    
+    # Send individual configs
+    if result.get('individual_configs'):
+        configs_text = "📋 **کانفیگ های جداگانه:**\n\n"
+        for i, cfg in enumerate(result['individual_configs'], 1):
+            flag = cfg.get('panel_flag', '🌍')
+            config_url = cfg.get('config', cfg) if isinstance(cfg, dict) else cfg
+            escaped_config = str(config_url).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            configs_text += f"{flag} <b>کانفیگ {i}:</b>\n<code>{escaped_config}</code>\n\n"
+        
+        configs_text += "💡 برای دریافت مجدد لینک ها، از دکمه 'کانفیگ های من' استفاده کنید."
+        
+        await context.bot.send_message(
+            chat_id=user.telegram_id,
+            text=configs_text,
+            parse_mode="HTML"
+        )
 
 
 
@@ -1269,3 +1282,83 @@ async def show_help(query):
     text += f"📞 **نیاز به کمک دارید؟** با {settings.SUPPORT_USERNAME} تماس بگیرید"
     
     await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+
+
+
+
+async def handle_test_config(query, context):
+    """Handle test config request"""
+    from app.core.panel_config import panel_config
+    
+    test_config = panel_config.get_test_config_settings()
+    if not test_config.get('enabled', False):
+        await query.answer("❌ تست رایگان غیرفعال است", show_alert=True)
+        return
+    
+    user = await User.find_one(User.telegram_id == query.from_user.id)
+    if not user:
+        await query.answer("❌ کاربر یافت نشد", show_alert=True)
+        return
+    
+    for sub_link in user.subscriptions:
+        sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
+        if sub and sub.is_active and "test" in sub.base_name.lower():
+            await query.answer("❌ شما قبلاً تست رایگان دریافت کردهاید", show_alert=True)
+            return
+    
+    await query.answer("⏳ در حال ایجاد تست رایگان...")
+    await query.edit_message_text("⏳ **در حال ایجاد کانفیگ تست...**\n\nلطفاً چند لحظه صبر کنید.", parse_mode="Markdown")
+    
+    from app.models.vpn_plan import VPNPlan
+    from app.models.order import Order, OrderStatus
+    
+    duration_days = test_config.get('duration_days', 10)
+    traffic_gb = test_config.get('traffic_gb', 2)
+    
+    test_plan = VPNPlan(
+        name=f"تست {traffic_gb}GB - {duration_days} روز",
+        traffic_limit_gb=traffic_gb,
+        duration_days=duration_days,
+        price=0,
+        is_active=True
+    )
+    await test_plan.insert()
+    
+    order = Order(
+        user=user,
+        vpn_plan=test_plan,
+        protocol="v2ray",
+        price=0,
+        status=OrderStatus.COMPLETED
+    )
+    await order.save()
+    
+    result = await vpn_service.create_subscription(order, f"test_{user.telegram_id}")
+    
+    if result and result.get("total_configs", 0) > 0:
+        text = "✅ **تست رایگان آماده است!**\n\n"
+        text += f"📦 **پلن:** {test_plan.name}\n"
+        text += f"📊 **حجم:** {traffic_gb}GB\n"
+        text += f"🌍 **تعداد کانفیگ:** {result['total_configs']}\n"
+        text += f"⏱️ **مدت:** {duration_days} روز\n\n"
+        text += "📱 **لینک اشتراک:**\n"
+        text += f"`{result['subscription_url']}`\n\n"
+        text += "💡 برای خرید پلن کامل از 🛒 خرید VPN استفاده کنید"
+        
+        await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        
+        if result.get('individual_configs'):
+            configs_text = "📋 **کانفیگ های جداگانه:**\n\n"
+            for i, cfg in enumerate(result['individual_configs'], 1):
+                flag = cfg.get('panel_flag', '🌍')
+                config_url = cfg.get('config', cfg) if isinstance(cfg, dict) else cfg
+                escaped_config = str(config_url).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                configs_text += f"{flag} <b>کانفیگ {i}:</b>\n<code>{escaped_config}</code>\n\n"
+            
+            await query.message.reply_text(configs_text, parse_mode="HTML")
+    else:
+        await query.edit_message_text(
+            "❌ **خطا در ایجاد تست**\n\nلطفاً بعداً دوباره تلاش کنید.",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="Markdown"
+        )

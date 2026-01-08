@@ -40,6 +40,12 @@ settings:
   traffic_aggregation: true  # Aggregate traffic from all panels
   balance_threshold: 3  # Auto-balance when difference > 3 users (lower = more sensitive)
   
+  # Test Config Settings
+  test_config:
+    enabled: true  # Enable/disable test config button
+    duration_days: 10  # Test config duration in days
+    traffic_gb: 10  # Test config traffic limit in GB
+  
 # Load balancing notes:
 # - Panel Level: System tracks TOTAL subscriptions per server
 # - Each user gets configs from ONE selected server only (proper load balancing)

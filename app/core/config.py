@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     ENABLE_PAYMENT_VERIFICATION: bool = False
     ENABLE_CHANNEL_VERIFICATION: bool = False
     
+    # Test Config Settings
+    TEST_CONFIG_ENABLED: bool = True
+    TEST_CONFIG_DURATION_DAYS: int = 10
+    TEST_CONFIG_TRAFFIC_GB: int = 2
+    
     # API Documentation Security
     DOCS_PATH: str = "/asdfasdfasfdf/docs"
     REDOC_PATH: str = "/asdfasdfasfdf/redoc"

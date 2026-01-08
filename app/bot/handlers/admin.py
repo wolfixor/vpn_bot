@@ -25,6 +25,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📢 پیام همگانی", callback_data="admin_broadcast_start")],
         [InlineKeyboardButton("👥 لیست کاربران", callback_data="admin_users")],
         [InlineKeyboardButton("💳 پرداختهای معلق", callback_data="admin_pending")],
+        [InlineKeyboardButton("🧪 حذف تست‌ها", callback_data="admin_delete_tests")],
     ]
     
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
@@ -162,6 +163,8 @@ async def handle_admin_callback(query, context):
             [InlineKeyboardButton("📢 پیام همگانی", callback_data="admin_broadcast_start")],
             [InlineKeyboardButton("👥 لیست کاربران", callback_data="admin_users")],
             [InlineKeyboardButton("💳 پرداختهای معلق", callback_data="admin_pending")],
+            [InlineKeyboardButton("🧪 حذف تستها", callback_data="admin_delete_tests")],
+            [InlineKeyboardButton("🔄 ریست تستها", callback_data="admin_reset_tests")],
         ]
         
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
@@ -229,6 +232,58 @@ async def handle_admin_callback(query, context):
         context.user_data.pop("broadcast_data", None)
         context.user_data.pop("waiting_for_broadcast", None)
         await query.edit_message_text("❌ ارسال پیام لغو شد.")
+    
+    elif data == "admin_delete_tests":
+        from app.models.subscription import Subscription
+        from app.services.vpn_service import vpn_service
+        
+        test_subs = await Subscription.find({"is_active": True}).to_list()
+        test_subs = [s for s in test_subs if "test" in s.base_name.lower()]
+        
+        if not test_subs:
+            await query.answer("✅ هیچ تستی وجود ندارد", show_alert=True)
+            return
+        
+        await query.edit_message_text(f"⏳ در حال حذف {len(test_subs)} تست...")
+        
+        deleted = 0
+        for sub in test_subs:
+            try:
+                await vpn_service.delete_subscription(sub)
+                deleted += 1
+            except:
+                pass
+        
+        text = f"✅ **حذف کامل شد!**\n\n"
+        text += f"• کل: {len(test_subs)}\n"
+        text += f"• حذف شده: {deleted}"
+        
+        keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    
+    elif data == "admin_reset_tests":
+        from app.models.subscription import Subscription
+        from app.services.vpn_service import vpn_service
+        
+        test_subs = await Subscription.find({"is_active": True}).to_list()
+        test_subs = [s for s in test_subs if "test" in s.base_name.lower()]
+        
+        await query.edit_message_text(f"⏳ در حال حذف {len(test_subs)} تست...")
+        
+        deleted = 0
+        for sub in test_subs:
+            try:
+                await vpn_service.delete_subscription(sub)
+                deleted += 1
+            except:
+                pass
+        
+        text = f"✅ **ریست کامل شد!**\n\n"
+        text += f"• حذف شده: {deleted}\n\n"
+        text += "🔄 کاربران میتوانند دوباره تست بگیرند"
+        
+        keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data="admin_back")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
