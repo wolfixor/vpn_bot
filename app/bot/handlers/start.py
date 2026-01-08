@@ -85,8 +85,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("plan_"):
         plan_id = data.split("_")[1]
         context.user_data["selected_plan_id"] = plan_id
-        context.user_data["waiting_for_config_name"] = True
-        await ask_config_name(query)
+        context.user_data["waiting_for_coupon"] = True
+        await ask_coupon_code_inline(query)
     elif data.startswith("payment_"):
         payment_method = data.replace("payment_", "", 1)
         # Check if this is a renewal payment
@@ -827,15 +827,17 @@ async def show_delivery_options(query):
     
     await query.edit_message_text(text, reply_markup=get_delivery_options_keyboard(), parse_mode="Markdown")
 
-async def ask_config_name(query):
-    """Ask user for custom config name"""
-    from telegram.ext import ContextTypes
+async def ask_coupon_code_inline(query):
+    """Ask user for coupon code inline"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
-    text = "یک نام دلخواه برای کانفیگتون انتخاب کنید\n\n"
-    text += "مثال: mamad, akbar , asghar\n\n"
-    text += "💡 **نکته:** نام باید فقط انگلیسی و حداکثر 20 کاراکتر باشد."
+    text = "🎁 **کد تخفیف دارید؟**\n\n"
+    text += "اگر کد تخفیف دارید، آن را تایپ کنید.\n"
+    text += "اگر ندارید، روی دکمه زیر کلیک کنید."
     
-    await query.edit_message_text(text, parse_mode="Markdown")
+    keyboard = [[InlineKeyboardButton("⏭️ بدون کد ادامه بده", callback_data="skip_coupon")]]
+    
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 async def ask_coupon_code(update):
     """Ask user for coupon code"""
@@ -849,44 +851,6 @@ async def ask_coupon_code(update):
     
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-async def handle_config_name_input(update, context):
-    """Handle user's config name input"""
-    config_name = update.message.text.strip()
-    
-    # Validate English only
-    if not config_name.isascii():
-        await update.message.reply_text(
-            "❌ **فقط حروف انگلیسی مجاز است!**\n\n"
-            "لطفاً نام را به انگلیسی وارد کنید.\n"
-            "مثال: Home, Work, Mobile",
-            parse_mode="Markdown"
-        )
-        return
-    
-    # Validate name
-    if len(config_name) > 20:
-        await update.message.reply_text(
-            "❌ **نام خیلی بلند است!**\n\n"
-            "لطفاً نامی کمتر از 20 کاراکتر وارد کنید.",
-            parse_mode="Markdown"
-        )
-        return
-    
-    if len(config_name) < 2:
-        await update.message.reply_text(
-            "❌ **نام خیلی کوتاه است!**\n\n"
-            "لطفاً نامی حداقل 2 کاراکتر وارد کنید.",
-            parse_mode="Markdown"
-        )
-        return
-    
-    # Save config name
-    context.user_data["config_name"] = config_name
-    context.user_data["waiting_for_config_name"] = False
-    
-    # Ask for coupon code
-    context.user_data["waiting_for_coupon"] = True
-    await ask_coupon_code(update)
 
 async def show_payment_methods(update):
     """Show payment method selection"""
@@ -1036,13 +1000,10 @@ async def confirm_payment_admin(query, context, payment_id):
             )
             await usage.insert()
     
-    # Get config name from order's user context (stored during payment creation)
-    config_name = context.bot_data.get(f"config_name_{payment.user_telegram_id}")
+    # Create VPN subscription without config_name
+    result = await vpn_service.create_subscription(order)
     
-    # Create VPN subscription
-    result = await vpn_service.create_subscription(order, config_name)
-    
-    # Clear the stored config name after successful creation
+    # Clear any stored data after successful creation
     context.bot_data.pop(f"config_name_{payment.user_telegram_id}", None)
     
     # Send subscription link to user (always)
@@ -1362,7 +1323,7 @@ async def handle_test_config(query, context):
     logger.info(f"[TEST_CONFIG] Order created: {order.id}")
     
     try:
-        result = await vpn_service.create_subscription(order, f"test_{user.telegram_id}")
+        result = await vpn_service.create_subscription(order)
         logger.info(f"[TEST_CONFIG] Subscription result: {result}")
     except Exception as e:
         logger.error(f"[TEST_CONFIG] Error creating subscription: {e}", exc_info=True)

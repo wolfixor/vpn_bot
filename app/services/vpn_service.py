@@ -12,7 +12,7 @@ from app.core.panel_config import panel_config
 
 class VPNService:
     
-    async def create_subscription(self, order: Order, config_name: str = None) -> Dict[str, Any]:
+    async def create_subscription(self, order: Order) -> Dict[str, Any]:
         """Create VPN configs on ALL enabled panels - user gets unlimited configs but limited traffic estimation"""
         from app.models.subscription import ConfigItem
         from app.services.load_balancer import load_balancer
@@ -42,8 +42,8 @@ class VPNService:
             actual_limit = estimated_gb
         
         base_uuid = str(uuid.uuid4())
-        base_name = f"{config_name}_{base_uuid[:8]}" if config_name else f"user_{user.telegram_id}_{base_uuid[:8]}"
-        print(f"🏷️ Config name provided: '{config_name}' -> Base name: '{base_name}'")
+        base_name = f"user_{base_uuid[:8]}"
+        print(f"🏷️ Auto-generated base name: '{base_name}'")
         
         config_items = []
         all_config_urls = []
