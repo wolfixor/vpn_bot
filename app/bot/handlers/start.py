@@ -1355,7 +1355,7 @@ async def handle_test_config(query, context):
         vpn_plan=test_plan,
         protocol="v2ray",
         price=0,
-        status=OrderStatus.COMPLETED
+        status=OrderStatus.ACTIVE
     )
     await order.save()
     logger.info(f"[TEST_CONFIG] Order created: {order.id}")
