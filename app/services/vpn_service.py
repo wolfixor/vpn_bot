@@ -99,8 +99,18 @@ class VPNService:
                 inbound_data = inbound_info["data"]
                 inbound_id = inbound_data["id"]
                 client_id = str(uuid.uuid4())
+                
+                # Better naming: location + type (direct/tunnel)
+                inbound_type = "tunnel" if inbound_info["is_tunnel"] else "direct"
+                panel_location = selected_panel_info['name'].lower().replace(' ', '_')
+                
+                # For internal tracking (full name with base_name and inbound_id for uniqueness)
                 client_email = f"{base_name}_{selected_panel_name}_inbound{inbound_id}"
-                print(f"📧 Creating client: {client_email} (inbound {inbound_id})")
+                
+                # For display in VPN app (just location + type)
+                display_name = f"{panel_location}_{inbound_type}"
+                
+                print(f"📧 Creating client: {client_email} (display: {display_name}, inbound {inbound_id})")
                 
                 result = await panel_service.add_client(
                     inbound_id=inbound_id,
@@ -123,7 +133,8 @@ class VPNService:
                     )
                     config_items.append(config_item)
                     
-                    config_url = self.generate_config_url_from_item(config_item, inbound_data, inbound_info["ip"])
+                    # Generate config with display name instead of full client_email
+                    config_url = self.generate_config_url_from_item(config_item, inbound_data, inbound_info["ip"], display_name)
                     if config_url:
                         all_config_urls.append({"config": config_url, "panel_flag": selected_panel_info['flag']})
                     
@@ -204,12 +215,12 @@ class VPNService:
         except:
             return ''
     
-    def generate_config_url_from_item(self, config_item, inbound_config: dict, panel_ip: str) -> str:
+    def generate_config_url_from_item(self, config_item, inbound_config: dict, panel_ip: str, display_name: str = None) -> str:
         """Auto-generate config URL from ConfigItem"""
         try:
             return AutoConfigGenerator.generate(
                 config_item.client_uuid,
-                config_item.client_email, 
+                display_name or config_item.client_email,
                 inbound_config,
                 panel_ip
             )
