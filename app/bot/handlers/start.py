@@ -1280,15 +1280,20 @@ async def handle_test_config(query, context):
         await query.answer("❌ کاربر یافت نشد", show_alert=True)
         return
     
-    logger.info(f"[TEST_CONFIG] User found: {user.id}, checking existing subscriptions")
+    logger.info(f"[TEST_CONFIG] User found: {user.id}, checking existing test orders")
     
-    for sub_link in user.subscriptions:
-        sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
-        if sub and sub.is_active and "test" in sub.base_name.lower():
-            logger.warning(f"[TEST_CONFIG] User {user.id} already has test subscription: {sub.base_name}")
-            text = "❌ **تست رایگان قبلاً دریافت شده**\n\nشما قبلاً تست رایگان دریافت کردهاید.\n\nبرای خرید پلن کامل از 🛒 خرید VPN استفاده کنید."
-            await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
-            return
+    # Check if user already has a free test order (price = 0)
+    existing_test_orders = await Order.find(
+        Order.user.id == user.id,
+        Order.price == 0,
+        Order.status == OrderStatus.ACTIVE
+    ).to_list()
+    
+    if existing_test_orders:
+        logger.warning(f"[TEST_CONFIG] User {user.id} already has {len(existing_test_orders)} test order(s)")
+        text = "❌ **تست رایگان قبلاً دریافت شده**\n\nشما قبلاً تست رایگان دریافت کردهاید.\n\nبرای خرید پلن کامل از 🛒 خرید VPN استفاده کنید."
+        await query.edit_message_text(text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        return
     
     logger.info(f"[TEST_CONFIG] Creating test config for user {user.id}")
     await query.answer("⏳ در حال ایجاد تست رایگان...")
@@ -1375,15 +1380,20 @@ async def show_test_config_inline(update):
         await update.message.reply_text("❌ تست رایگان غیرفعال است", parse_mode="Markdown")
         return
     
-    # Check if user already has test config
+    # Check if user already has test config (free order with price = 0)
     user = await User.find_one(User.telegram_id == update.effective_user.id)
     if user:
-        for sub_link in user.subscriptions:
-            sub = await sub_link.fetch() if hasattr(sub_link, 'fetch') else sub_link
-            if sub and sub.is_active and "test" in sub.base_name.lower():
-                text = "❌ **تست رایگان قبلاً دریافت شده**\n\nشما قبلاً تست رایگان دریافت کردهاید.\n\nبرای خرید پلن کامل از 🛒 خرید VPN استفاده کنید."
-                await update.message.reply_text(text, parse_mode="Markdown")
-                return
+        from app.models.order import OrderStatus
+        existing_test_orders = await Order.find(
+            Order.user.id == user.id,
+            Order.price == 0,
+            Order.status == OrderStatus.ACTIVE
+        ).to_list()
+        
+        if existing_test_orders:
+            text = "❌ **تست رایگان قبلاً دریافت شده**\n\nشما قبلاً تست رایگان دریافت کردهاید.\n\nبرای خرید پلن کامل از 🛒 خرید VPN استفاده کنید."
+            await update.message.reply_text(text, parse_mode="Markdown")
+            return
     
     text = "🧪 **تست رایگان VPN**\n\n"
     text += f"📊 **حجم:** {test_config.get('traffic_gb', 2)}GB\n"
