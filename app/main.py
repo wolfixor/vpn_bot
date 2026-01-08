@@ -15,9 +15,11 @@ async def lifespan(app: FastAPI):
     # Start background services
     from app.services.subscription_cleanup import start_subscription_cleanup
     from app.services.load_balancer import start_load_balancer_sync
+    from app.services.panel_health_monitor import start_panel_health_monitor
     
     await start_subscription_cleanup()
     await start_load_balancer_sync()
+    await start_panel_health_monitor()
     
     # Start Telegram bot if token is provided
     if settings.TELEGRAM_BOT_TOKEN:

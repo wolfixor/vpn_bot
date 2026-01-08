@@ -51,5 +51,17 @@ class PanelConfig:
         """Get max tunnels per panel from settings (0 = all tunnels)"""
         config = cls.load()
         return config.get('settings', {}).get('max_tunnels_per_panel', 1)
+    
+    @classmethod
+    def is_auto_recovery_enabled(cls) -> bool:
+        """Check if automatic disaster recovery is enabled"""
+        config = cls.load()
+        return config.get('settings', {}).get('auto_recovery_enabled', True)
+    
+    @classmethod
+    def get_health_check_interval(cls) -> int:
+        """Get health check interval in seconds"""
+        config = cls.load()
+        return config.get('settings', {}).get('health_check_interval', 300)
 
 panel_config = PanelConfig()

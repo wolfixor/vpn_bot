@@ -19,7 +19,7 @@ class MigrationService:
         pass
 
     async def migrate_subscription(self, subscription: Subscription, target_panel_key: str, reset_traffic: bool = True) -> Dict[str, Any]:
-        """Migrate a subscription from current panel to target panel"""
+        """Migrate a subscription from current panel(s) to target panel"""
         try:
             if not subscription.configs:
                 return {"success": False, "error": "No configs found in subscription"}
@@ -32,23 +32,28 @@ class MigrationService:
             target_panel_info = target_panels[target_panel_key]
             target_service = XUIService(target_panel_key)
 
-            # Get source panel info from first config
-            source_config = subscription.configs[0]
-            source_panel_key, source_panel_info = panel_config.get_panel_by_name(source_config.panel_name)
-            
-            if not source_panel_key:
-                return {"success": False, "error": f"Source panel {source_config.panel_name} not found"}
-
-            source_service = XUIService(source_panel_key)
+            # Get unique source panels from all configs
+            source_panels = {}
+            for config in subscription.configs:
+                panel_key, panel_info = panel_config.get_panel_by_name(config.panel_name)
+                if panel_key and panel_key not in source_panels:
+                    source_panels[panel_key] = {
+                        "info": panel_info,
+                        "service": XUIService(panel_key),
+                        "configs": []
+                    }
+                if panel_key:
+                    source_panels[panel_key]["configs"].append(config)
 
             # Get current traffic usage before migration
             current_usage = 0
             if not reset_traffic:
                 try:
-                    for config in subscription.configs:
-                        client_stats = await source_service.get_client_stats(config.inbound_id, config.client_uuid)
-                        if client_stats:
-                            current_usage += client_stats.get('down', 0) + client_stats.get('up', 0)
+                    for panel_key, panel_data in source_panels.items():
+                        for config in panel_data["configs"]:
+                            client_stats = await panel_data["service"].get_client_stats(config.inbound_id, config.client_uuid)
+                            if client_stats:
+                                current_usage += client_stats.get('down', 0) + client_stats.get('up', 0)
                 except Exception as e:
                     logger.warning(f"Could not get traffic stats: {e}")
 
@@ -91,17 +96,19 @@ class MigrationService:
             if not new_configs:
                 return {"success": False, "error": "Failed to create configs on target panel"}
 
-            # Delete old configs from source panel
+            # Delete old configs from ALL source panels
             deleted_count = 0
-            for config in subscription.configs:
-                try:
-                    success = await source_service.delete_client(config.inbound_id, config.client_uuid)
-                    if success:
-                        deleted_count += 1
-                except Exception as e:
-                    logger.warning(f"Failed to delete config from source: {e}")
+            for panel_key, panel_data in source_panels.items():
+                for config in panel_data["configs"]:
+                    try:
+                        success = await panel_data["service"].delete_client(config.inbound_id, config.client_uuid)
+                        if success:
+                            deleted_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to delete config from {panel_key}: {e}")
 
             # Update subscription with new configs and migration history
+            source_panel_names = [p["info"]["name"] for p in source_panels.values()]
             subscription.configs = new_configs
             if not reset_traffic:
                 subscription.traffic_used = current_usage
@@ -110,7 +117,7 @@ class MigrationService:
             
             # Track migration history for sync optimization
             subscription.migration_history = {
-                "from": source_config.panel_name,
+                "from": source_panel_names,
                 "to": target_panel_info['name'],
                 "migrated_at": datetime.utcnow(),
                 "reason": "manual_migration"
@@ -118,16 +125,17 @@ class MigrationService:
             
             await subscription.save()
 
-            # Update load balancer
+            # Update load balancer - deallocate from ALL source panels
             from app.services.load_balancer import load_balancer
-            await load_balancer.deallocate_subscription_from_server(source_panel_key)
+            for panel_key in source_panels.keys():
+                await load_balancer.deallocate_subscription_from_server(panel_key)
             await load_balancer.allocate_subscription_to_server(target_panel_key)
 
-            logger.info(f"Subscription {subscription.subscription_token} migrated from {source_panel_key} to {target_panel_key}")
+            logger.info(f"Subscription {subscription.subscription_token} migrated from {source_panel_names} to {target_panel_key}")
             
             return {
                 "success": True,
-                "message": f"Subscription migrated from {source_config.panel_name} to {target_panel_info['name']}",
+                "message": f"Subscription migrated from {', '.join(source_panel_names)} to {target_panel_info['name']}",
                 "new_configs_count": len(new_configs),
                 "deleted_configs_count": deleted_count,
                 "traffic_preserved": not reset_traffic
