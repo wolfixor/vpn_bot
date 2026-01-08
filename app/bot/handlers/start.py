@@ -195,6 +195,8 @@ async def check_channel_membership_on_start(update, context):
 
 async def show_welcome_menu(update, user_name):
     """Show welcome menu after successful verification"""
+    from app.core.panel_config import panel_config
+    
     text = f"خوش آمدید {user_name}! 🎉\n\n"
     text += "🚀 **سیستم VPN مولتی لوکیشن**\n"
     text += "✅ سرورهای متعدد در سراسر جهان\n"
@@ -203,11 +205,15 @@ async def show_welcome_menu(update, user_name):
     text += "یک گزینه انتخاب کنید:"
     
     # Create persistent reply keyboard
+    test_config = panel_config.get_test_config_settings()
     keyboard = [
         ["🛒 خرید یا تمدید VPN", "📊 اشتراک من"],
         ["📦 کانفیگ های من", "📋 فاکتور های من"],
         ["ℹ️ راهنما", "🔄 شروع مجدد"]
     ]
+    if test_config.get('enabled', False):
+        keyboard.insert(1, ["🧪 تست رایگان"])
+    
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
     
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -672,6 +678,7 @@ async def show_help_message(update):
 
 async def restart_bot_message(update, context):
     """Restart bot for message handler"""
+    from app.core.panel_config import panel_config
     context.user_data.clear()
     
     user_name = update.effective_user.first_name
@@ -683,11 +690,14 @@ async def restart_bot_message(update, context):
     text += "✅ تعویض خودکار سرور\n\n"
     text += "یک گزینه انتخاب کنید:"
     
+    test_config = panel_config.get_test_config_settings()
     keyboard = [
         ["🛒 خرید یا تمدید VPN", "📊 اشتراک من"],
         ["📦 کانفیگ های من", "📋 فاکتور های من"],
         ["ℹ️ راهنما", "🔄 شروع مجدد"]
     ]
+    if test_config.get('enabled', False):
+        keyboard.insert(1, ["🧪 تست رایگان"])
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
     
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -1362,3 +1372,23 @@ async def handle_test_config(query, context):
             reply_markup=get_main_menu_keyboard(),
             parse_mode="Markdown"
         )
+
+
+async def show_test_config_inline(update):
+    """Show test config button as inline keyboard for message handler"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from app.core.panel_config import panel_config
+    
+    test_config = panel_config.get_test_config_settings()
+    if not test_config.get('enabled', False):
+        await update.message.reply_text("❌ تست رایگان غیرفعال است", parse_mode="Markdown")
+        return
+    
+    text = "🧪 **تست رایگان VPN**\n\n"
+    text += f"📊 **حجم:** {test_config.get('traffic_gb', 2)}GB\n"
+    text += f"⏱️ **مدت:** {test_config.get('duration_days', 10)} روز\n\n"
+    text += "💡 هر کاربر فقط یک بار میتواند تست رایگان دریافت کند.\n\n"
+    text += "برای دریافت تست رایگان روی دکمه زیر کلیک کنید:"
+    
+    keyboard = [[InlineKeyboardButton("🧪 دریافت تست رایگان", callback_data="test_config")]]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")

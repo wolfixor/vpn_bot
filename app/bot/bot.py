@@ -104,6 +104,9 @@ class TelegramBot:
         elif "شروع مجدد" in text:
             from app.bot.handlers.start import restart_bot_message
             await restart_bot_message(update, context)
+        elif "تست رایگان" in text:
+            from app.bot.handlers.start import show_test_config_inline
+            await show_test_config_inline(update)
         else:
             # Check if user is entering config name
             if context.user_data.get("waiting_for_config_name"):
